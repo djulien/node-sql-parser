@@ -101,14 +101,17 @@
   var varList = [];
 }
 
+//added "debugger" for easier debug -DJ
+//add optional trailing ";" -DJ
 start 
-  = &{ params = []; return true; } __ ast:(union_stmt  / update_stmt / replace_insert_stmt ) {
+  = &{ debugger; params = []; return true; } __ ast:(union_stmt  / update_stmt / replace_insert_stmt ) __ SEMI? {
+//TODO: maybe params should not be cleared here? (proc_stmts can be recursive) -DJ
       return {
         ast   : ast,
         param : params
       } 
     } 
-    /ast:proc_stmts {
+    /ast:proc_stmts __ SEMI? {
       return {
         ast : ast  
       }
@@ -656,8 +659,9 @@ additive_expr
       return createBinaryExprChain(head, tail);
     }
 
+//added "||" operator -DJ
 additive_operator
-  = "+" / "-"
+  = "+" / "-" / "||"
 
 multiplicative_expr
   = head:primary
@@ -968,6 +972,13 @@ KW_MIN       = "MIN"i      !ident_start    { return 'MIN';      }
 KW_SUM       = "SUM"i      !ident_start    { return 'SUM';      }
 KW_AVG       = "AVG"i      !ident_start    { return 'AVG';      }
 
+//func/proc -DJ
+KW_PROC      = "PROCEDURE"i //!ident_start   { return 'PROCEDURE'; }
+KW_FUNC      = "FUNCTION"i //!ident_start    { return 'FUNCTION'; }
+KW_RETURNS   = "RETURNS"i  //!ident_start    { return 'RETURNS';  }
+KW_BEGIN     = "BEGIN"i    //!ident_start    { return 'BEGIN';    }
+KW_END       = "END"i      //!ident_start    { return 'END';      }
+
 //specail character
 DOT       = '.'
 COMMA     = ','
@@ -977,6 +988,8 @@ RPAREN    = ')'
 
 LBRAKE    = '['
 RBRAKE    = ']'
+
+SEMI      = ';' //need terminator for multiple proc_stmt -DJ
 
 __ =
   whitespace*
@@ -993,11 +1006,58 @@ EOL
 EOF = !.
 
 //begin procedure extension
+//added proc, func keywds, ret type -DJ
+//procs don't have arg lists, but allow it here so parse rule can be shared
 proc_stmts 
-  = proc_stmt* 
+  = __ t:(KW_PROC / KW_FUNC) __ name:ident __ m:mem_chain __ l:arg_list? __ r:(KW_RETURNS __ data_type)? __ KW_IS __ KW_BEGIN __ s:start* __ KW_END {
+    //based on proc_func_call example below
+    varList.push(name); //push for analysis
+    return {
+      type : t.slice(0, 4) + "_def",
+      name : name, 
+      members : m,
+      args : {
+        type  : 'arg_list',
+        value : l
+      },
+      rettype: r,
+      body : s
+    }
+  }
+  / head:proc_stmt tail:(__ SEMI __ proc_stmt)* {
+    return createList(head, tail);
+  }
+
+arg_list 
+  = LPAREN __ head:arg_def tail:(__ COMMA __ arg_def)* __ RPAREN {
+//NO  / proc_stmt* //creates "infinite loop" error
+    return createList(head, tail);
+  } 
+
+arg_def
+  = name:ident_name __ type:data_type {
+    return {
+      type: 'arg_def',
+      name: name,
+      datatype: type
+    }
+  }
+
+//need data type for proc/func return type and func args -DJ
+//just check syntax (allow any data type/len)
+//see examples at https://forcedotcom.github.io/phoenix/index.html#data_type
+data_type
+  = name:ident_name size:(__ LPAREN __ int __ RPAREN)? {
+      return {
+        type  : 'data_type',
+        typename : name,
+        precision : size 
+      }  
+    }
 
 proc_stmt 
   = &{ varList = []; return true; } __ s:(assign_stmt / return_stmt) {
+//TODO: maybe varList should not be cleared here? (proc_stmts can be recursive) -DJ
       return {
         stmt : s,
         vars: varList
@@ -1026,6 +1086,7 @@ proc_expr
   / proc_join 
   / proc_additive_expr 
   / proc_array
+  / expr //allow arith expr return from func -DJ
 
 proc_additive_expr
   = head:proc_multiplicative_expr

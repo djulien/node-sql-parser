@@ -659,7 +659,7 @@ additive_expr
       return createBinaryExprChain(head, tail);
     }
 
-//added "||" operator -DJ
+//added "||" (string concat) operator -DJ
 additive_operator
   = "+" / "-" / "||"
 
@@ -972,7 +972,7 @@ KW_MIN       = "MIN"i      !ident_start    { return 'MIN';      }
 KW_SUM       = "SUM"i      !ident_start    { return 'SUM';      }
 KW_AVG       = "AVG"i      !ident_start    { return 'AVG';      }
 
-//func/proc -DJ
+//func/proc keywords -DJ
 KW_PROC      = "PROCEDURE"i //!ident_start   { return 'PROCEDURE'; }
 KW_FUNC      = "FUNCTION"i //!ident_start    { return 'FUNCTION'; }
 KW_RETURNS   = "RETURNS"i  //!ident_start    { return 'RETURNS';  }
@@ -1006,7 +1006,7 @@ EOL
 EOF = !.
 
 //begin procedure extension
-//added proc, func keywds, ret type -DJ
+//added proc/func keywds, ret type -DJ
 //procs don't have arg lists, but allow it here so parse rule can be shared
 proc_stmts 
   = __ t:(KW_PROC / KW_FUNC) __ name:ident __ m:mem_chain __ l:arg_list? __ r:(KW_RETURNS __ data_type)? __ KW_IS __ KW_BEGIN __ s:start* __ KW_END {
@@ -1016,12 +1016,14 @@ proc_stmts
       type : t.slice(0, 4) + "_def",
       name : name, 
       members : m,
-      args : {
-        type  : 'arg_list',
-        value : l
-      },
-      rettype: r,
-      body : s
+//      args : {
+//        type  : 'arg_list',
+//        value : l
+//      },
+      args: l, //array
+      rettype: ((r || [])[2] || {}).typename,
+      retprec: ((r || [])[2] || {}).precision,
+      body : s, //(s || []).map((stmt) => stmt.head.stmt || stmt.head), //array of stmts
     }
   }
   / head:proc_stmt tail:(__ SEMI __ proc_stmt)* {
@@ -1030,8 +1032,8 @@ proc_stmts
 
 arg_list 
   = LPAREN __ head:arg_def tail:(__ COMMA __ arg_def)* __ RPAREN {
-//NO  / proc_stmt* //creates "infinite loop" error
     return createList(head, tail);
+//NO  / proc_stmt* //creates "infinite loop" error
   } 
 
 arg_def
@@ -1039,7 +1041,8 @@ arg_def
     return {
       type: 'arg_def',
       name: name,
-      datatype: type
+      datatype: type.typename,
+      precision: type.precision,
     }
   }
 
@@ -1051,7 +1054,7 @@ data_type
       return {
         type  : 'data_type',
         typename : name,
-        precision : size 
+        precision : (size || [])[3],
       }  
     }
 

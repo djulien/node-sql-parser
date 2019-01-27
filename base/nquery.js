@@ -833,33 +833,36 @@ function peg$parse(input, options) {
             type : t.slice(0, 4) + "_def",
             name : name, 
             members : m,
-            args : {
-              type  : 'arg_list',
-              value : l
-            },
-            rettype: r,
-            body : s
+      //      args : {
+      //        type  : 'arg_list',
+      //        value : l
+      //      },
+            args: l, //array
+            rettype: ((r || [])[2] || {}).typename,
+            retprec: ((r || [])[2] || {}).precision,
+            body : s, //(s || []).map((stmt) => stmt.head.stmt || stmt.head), //array of stmts
           }
         },
       peg$c326 = function(head, tail) {
           return createList(head, tail);
         },
       peg$c327 = function(head, tail) {
-      //NO  / proc_stmt* //creates "infinite loop" error
           return createList(head, tail);
+      //NO  / proc_stmt* //creates "infinite loop" error
         },
       peg$c328 = function(name, type) {
           return {
             type: 'arg_def',
             name: name,
-            datatype: type
+            datatype: type.typename,
+            precision: type.precision,
           }
         },
       peg$c329 = function(name, size) {
             return {
               type  : 'data_type',
               typename : name,
-              precision : size 
+              precision : (size || [])[3],
             }  
           },
       peg$c330 = function() { varList = []; return true; },

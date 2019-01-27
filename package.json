@@ -1,6 +1,6 @@
 {
   "author": "windyrobin",
-  "name": "@djulien/node-sql-parser",
+  "name": "node-sql-parser",
   "description": "sql parser for nodejs",
   "version": "0.0.1",
   "repository": {

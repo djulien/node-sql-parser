@@ -7,6 +7,16 @@
 
 {
   var util = require('util');
+//  require("magic-globals");
+
+ //make debug easier -DJ
+  function DEBUG(n)
+  {
+//s    var called_from = __stack[1].getLineNumber();
+    debugger;
+    return true;
+  }
+
   var reservedMap = module.exports.reservedMap || {};
 
   function debug(str){
@@ -99,19 +109,51 @@
 
   //used for dependency analysis
   var varList = [];
+
+//wedge debug info: -DJ
+//require("magic-globals");
+require("colors").enabled = true; //for console output; https://github.com/Marak/colors.js/issues/127
+
+//  const sv_peg$buildStructuredError = peg$buildStructuredError;
+  function peg$buildStructuredError(expected, found, location)
+  {
+    console.log("max fail exp", peg$maxFailExpected);
+    console.log("max fail pos", peg$maxFailPos, "line", input.slice(0, peg$maxFailPos).split(/\n/).length, highlight(input, peg$maxFailPos, 20));
+//    return sv_peg$buildStructuredError.apply(null, arguments);
+    return new peg$SyntaxError(
+      peg$SyntaxError.buildMessage(expected, found),
+      expected,
+      found,
+      location
+    );
+  }
+
+/*
+//BROKEN-add caller info for easier debug: -DJ
+  function peg$literalExpectation(text, ignoreCase) {
+    return { type: "literal", text: `${text} @${__stack[1].getLineNumber()}`, ignoreCase: ignoreCase };
+  }
+*/
+
+//make it easier to see where error is: -DJ
+  function highlight(str, ofs, len)
+  {
+    return `${str.slice(ofs - len, ofs - 1).blue}${str.slice(ofs -1, ofs + 1).cyan}${str.slice(ofs + 1, ofs + len).blue}`.replace(/\n/g, "\\n"); //-DJx
+  }
 }
 
 //added "debugger" for easier debug -DJ
 //add optional trailing ";" -DJ
+//allow trailing white space -DJ
 start 
-  = &{ debugger; params = []; return true; } __ ast:(union_stmt  / update_stmt / replace_insert_stmt ) __ SEMI? {
+  = &{ params = []; /*DEBUG(1);*/ return true; } __ ast:(union_stmt  / update_stmt / replace_insert_stmt ) __ SEMI? __ {
 //TODO: maybe params should not be cleared here? (proc_stmts can be recursive) -DJ
       return {
         ast   : ast,
         param : params
       } 
     } 
-    /ast:proc_stmts __ SEMI? {
+    /ast:proc_stmts __ SEMI? __ {
       return {
         ast : ast  
       }
@@ -527,8 +569,12 @@ not_expr
     }
   / comparison_expr
 
+//add old-style outer join syntax -DJ
+ OJ = "(+)"
+
 comparison_expr
-  = left:additive_expr __ rh:comparison_op_right? {
+  = j:OJ? __ left:additive_expr __ rh:comparison_op_right? {
+      if (j) left.OJ = j; //remember outer join -DJ
       if (rh === null) {
         return left;  
       } else {
@@ -556,7 +602,8 @@ comparison_op_right
       / is_op_right
       / like_op_right
       / contains_op_right
-    ){
+    ) __ j:OJ? {
+      if (j) body.OJ = j; //remember outer join -DJ
       return body; 
     }
 */
@@ -700,6 +747,9 @@ column_ref
         column: col,
         location: location()
       };
+    }
+  / s:('(' __ select_stmt __ ')') {
+      return s[2]; //nested SELECT -DJ
     }
 
 column_list
@@ -975,7 +1025,6 @@ KW_AVG       = "AVG"i      !ident_start    { return 'AVG';      }
 //func/proc keywords -DJ
 KW_PROC      = "PROCEDURE"i //!ident_start   { return 'PROCEDURE'; }
 KW_FUNC      = "FUNCTION"i //!ident_start    { return 'FUNCTION'; }
-KW_RETURNS   = "RETURNS"i  //!ident_start    { return 'RETURNS';  }
 KW_BEGIN     = "BEGIN"i    //!ident_start    { return 'BEGIN';    }
 KW_END       = "END"i      //!ident_start    { return 'END';      }
 
@@ -1009,7 +1058,7 @@ EOF = !.
 //added proc/func keywds, ret type -DJ
 //procs don't have arg lists, but allow it here so parse rule can be shared
 proc_stmts 
-  = __ t:(KW_PROC / KW_FUNC) __ name:ident __ m:mem_chain __ l:arg_list? __ r:(KW_RETURNS __ data_type)? __ KW_IS __ KW_BEGIN __ s:start* __ KW_END {
+  = __ t:(KW_PROC / KW_FUNC) __ name:ident m:mem_chain __ l:arg_list? __ r:(KW_RETURN __ data_type)? __ KW_IS __ v:proc_vars? __ KW_BEGIN __ s:start* __ KW_END {
     //based on proc_func_call example below
     varList.push(name); //push for analysis
     return {
@@ -1021,6 +1070,7 @@ proc_stmts
 //        value : l
 //      },
       args: l, //array
+      vars: v, //array
       rettype: ((r || [])[2] || {}).typename,
       retprec: ((r || [])[2] || {}).precision,
       body : s, //(s || []).map((stmt) => stmt.head.stmt || stmt.head), //array of stmts
@@ -1058,8 +1108,27 @@ data_type
       }  
     }
 
+proc_vars
+  = head:proc_var tail:(__ SEMI __ proc_var)* __ SEMI? {
+    return createList(head, tail);
+    }
+  / proc_var __ SEMI?
+
+proc_var
+  = v:(ident / var_decl / param) __ dt:data_type __ e:(KW_ASSIGN __ proc_expr)? {
+    //push for analysis
+    varList.push(v);
+    return {
+      type : 'proc_var',
+      name : v,
+      data_type: dt,
+      init: (e || [])[2],
+    }
+  }
+
+//allow proc call, other proc stmts -DJ
 proc_stmt 
-  = &{ varList = []; return true; } __ s:(assign_stmt / return_stmt) {
+  = &{ varList = []; return true; } __ s:(assign_stmt / return_stmt / proc_func_call / proc_if ) {
 //TODO: maybe varList should not be cleared here? (proc_stmts can be recursive) -DJ
       return {
         stmt : s,
@@ -1067,8 +1136,24 @@ proc_stmt
       }
     }
 
+ KW_IF = 'if'i
+ KW_THEN = 'then'i
+ KW_ELSE = 'else'i
+ KW_ENDIF = KW_END __ KW_IF
+
+proc_if
+  = &{ return DEBUG(2); } KW_IF __ e:proc_expr __ KW_THEN __ t:proc_stmt __ SEMI? __ f:(KW_ELSE __ proc_stmt __ SEMI?)? __ KW_ENDIF {
+      return {
+        stmt: "if",
+        expr: e,
+        then_stmt: t,
+        else_stmt: (f || [])[2], //optional
+      }
+    }
+
+//allow param or var -DJ
 assign_stmt 
-  = va:var_decl __ KW_ASSIGN __ e:proc_expr {
+  = va:(var_decl / param / ident_name) __ KW_ASSIGN __ e:proc_expr {
     return {
       type : 'assign',
       left : va,
@@ -1077,19 +1162,20 @@ assign_stmt
   }
 
 return_stmt 
-  = KW_RETURN __ e:proc_expr {
+  = /*&{ return DEBUG(3); }*/ KW_RETURN __ e:proc_expr {
   return {
     type : 'return',
     expr: e
   }
 }
 
+//allow arith expr return from func -DJ
 proc_expr 
   = select_stmt 
   / proc_join 
+  / expr
   / proc_additive_expr 
   / proc_array
-  / expr //allow arith expr return from func -DJ
 
 proc_additive_expr
   = head:proc_multiplicative_expr
@@ -1124,12 +1210,14 @@ proc_primary
       return e; 
     } 
 
+//allow mem_chain -DJ
 proc_func_call
-  = name:ident __ LPAREN __ l:proc_primary_list __ RPAREN {
+  = name:ident m:mem_chain __ LPAREN __ l:proc_primary_list __ RPAREN {
       //compatible with original func_call
       return {
         type : 'function',
         name : name, 
+        members: m,
         args : {
           type  : 'expr_list',
           value : l

@@ -30,8 +30,10 @@ describe('sql adapter test',function(){
 
     sql = "SELECT (2 = true), (false = 0)";
     ast = Parser.parse(sql);
+//    inspect(ast);
 
     var estr = Adapter.toSQL(ast);
+    
     estr.should.eql('SELECT (2 = TRUE), (FALSE = 0)');
     //inspect(estr);
   });

@@ -15,7 +15,10 @@
   "engines": {
     "node": ">=0.8.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "colors": "git+https://github.com/djulien/colors.js.git",
+    "magic-globals": "^0.9.1"
+  },
   "devDependencies": {
     "pegjs": "=0.10.0",
     "mocha": ">=1.0.0",

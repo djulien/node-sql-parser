@@ -47,6 +47,13 @@ begin
    
  END;
 `;
+//test(sql);
+
+sql = `
+select trunc(c.report_date) "Date", c.case_num
+from cm_case c
+where c.tr_incidentuid is not null
+`;
 test(sql);
 
 

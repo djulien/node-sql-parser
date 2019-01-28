@@ -16,8 +16,19 @@
     debugger;
     return true;
   }
+  function inbuf() //BROKEN
+  {
+    debug(input.slice(pre$currPos).replace(/\n/g, "\\n"));
+  }
 
   var reservedMap = module.exports.reservedMap || {};
+//disambiguate plain proc vars: -DJ
+  reservedMap.BEGIN = true;
+  reservedMap.END = true;
+
+//allow in-line push: -DJ
+  if (!Array.prototype.push_fluent)
+    Object.defineProperty(Array.prototype, "push_fluent", {value: function(val) { this.push(val); return this; }});
 
   function debug(str){
     console.log(str);
@@ -143,10 +154,9 @@ require("colors").enabled = true; //for console output; https://github.com/Marak
 }
 
 //added "debugger" for easier debug -DJ
-//add optional trailing ";" -DJ
-//allow trailing white space -DJ
+//allow trailing white space and ";" -DJ
 start 
-  = &{ params = []; /*DEBUG(1);*/ return true; } __ ast:(union_stmt  / update_stmt / replace_insert_stmt ) __ SEMI? __ {
+  = &{ params = []; DEBUG(1); return true; } __ ast:(union_stmt  / update_stmt / replace_insert_stmt ) __ SEMI? __ {
 //TODO: maybe params should not be cleared here? (proc_stmts can be recursive) -DJ
       return {
         ast   : ast,
@@ -228,7 +238,7 @@ column_list_item
     } 
 
 alias_clause 
-  = KW_AS? __ i:ident { return i; }
+  = KW_AS? __ i:(ident / literal_string) { return i; } //allow quoted string -DJ
 
 from_clause
   = KW_FROM __ l:table_ref_list { return l; }
@@ -628,7 +638,8 @@ arithmetic_comparison_operator
   = ">=" / ">" / "<=" / "<>" / "<" / "=" / "!="  
 
 is_op_right
-  = op:KW_IS __ right:additive_expr {
+  = op:KW_IS n:(__ KW_NOT / "!")? __ right:additive_expr {
+      if (n) right = createUnaryExpr('NOT', right); //remember inverse compare (alt syntax); should be promoted -DJ
       return {
         op    : op,   
         right : right
@@ -1055,9 +1066,15 @@ EOL
 EOF = !.
 
 //begin procedure extension
-//added proc/func keywds, ret type -DJ
-//procs don't have arg lists, but allow it here so parse rule can be shared
+//put func/proc stmt at same level as other, allow repeat -DJ
 proc_stmts 
+  = head:proc_stmt tail:(__ SEMI __ proc_stmt)* __ SEMI? {
+    return createList(head, tail);
+  }
+
+//added proc/func keywds, ret type -DJ
+//procs don't have arg lists, but allow it here so parse rule can be shared -DJ
+proc_def
   = __ t:(KW_PROC / KW_FUNC) __ name:ident m:mem_chain __ l:arg_list? __ r:(KW_RETURN __ data_type)? __ KW_IS __ v:proc_vars? __ KW_BEGIN __ s:start* __ KW_END {
     //based on proc_func_call example below
     varList.push(name); //push for analysis
@@ -1073,11 +1090,8 @@ proc_stmts
       vars: v, //array
       rettype: ((r || [])[2] || {}).typename,
       retprec: ((r || [])[2] || {}).precision,
-      body : s, //(s || []).map((stmt) => stmt.head.stmt || stmt.head), //array of stmts
+      body : (s || []).reduce((result, stmt) => result.push_fluent(stmt.ast), []), //head.stmt || stmt.head), //array of stmts
     }
-  }
-  / head:proc_stmt tail:(__ SEMI __ proc_stmt)* {
-    return createList(head, tail);
   }
 
 arg_list 
@@ -1121,14 +1135,15 @@ proc_var
     return {
       type : 'proc_var',
       name : v,
-      data_type: dt,
+      data_type: dt.data_type,
+      data_prec: dt.precision,
       init: (e || [])[2],
     }
   }
 
 //allow proc call, other proc stmts -DJ
 proc_stmt 
-  = &{ varList = []; return true; } __ s:(assign_stmt / return_stmt / proc_func_call / proc_if ) {
+  = &{ varList = []; return true; } __ s:(assign_stmt / return_stmt / proc_func_call / proc_if / proc_def) {
 //TODO: maybe varList should not be cleared here? (proc_stmts can be recursive) -DJ
       return {
         stmt : s,
@@ -1142,7 +1157,7 @@ proc_stmt
  KW_ENDIF = KW_END __ KW_IF
 
 proc_if
-  = &{ return DEBUG(2); } KW_IF __ e:proc_expr __ KW_THEN __ t:proc_stmt __ SEMI? __ f:(KW_ELSE __ proc_stmt __ SEMI?)? __ KW_ENDIF {
+  = /*&{ return DEBUG(2); }*/ KW_IF __ e:proc_expr __ KW_THEN __ t:proc_stmts __ SEMI? __ f:(KW_ELSE __ proc_stmts __ SEMI?)? __ KW_ENDIF {
       return {
         stmt: "if",
         expr: e,

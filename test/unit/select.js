@@ -597,7 +597,7 @@ describe('select test',function(){
     } catch (_e) {
       e = _e;
     }
-
+console.log(e.name);
     (e.name).should.eql('SyntaxError');
   });
 

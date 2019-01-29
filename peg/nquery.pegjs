@@ -12,8 +12,9 @@
  //make debug easier -DJ
   function DEBUG(n)
   {
-//s    var called_from = __stack[1].getLineNumber();
-    debugger;
+//    var called_from = __stack[1].getLineNumber();
+    if (!DEBUG.seen) debugger; //first time only;
+    DEBUG.seen = true;
     return true;
   }
   function inbuf() //BROKEN
@@ -25,6 +26,7 @@
 //disambiguate plain proc vars: -DJ
   reservedMap.BEGIN = true;
   reservedMap.END = true;
+  reservedMap.PRAGMA = true;
 //needed to disambiguate proc calls without "()": -DJ
 //  reservedMap.PROCEDURE = true;
 //  reservedMap.FUNCTION = true;
@@ -183,7 +185,7 @@ union_stmt
       return head; 
     } 
 
-//add "select ... into"; must check this first -DJ
+//add "select ... into"; must check this first ("into" could be alias) n-DJ
 select_stmt
   = KW_SELECT __
     c:column_list_item     __  
@@ -358,9 +360,9 @@ where_clause
 group_by_clause
   = KW_GROUP __ KW_BY /*&{ return DEBUG(5); }*/ __ l:column_ref_list { return l; }
 
-//allow func calls with col names; greedy match - must check func call first: -DJ
+//allow func calls or expr: -DJ
 column_ref_list
-  = head:(func_call / column_ref) tail:(__ COMMA __ (func_call / column_ref))* {
+  = head:/*(func_call / column_ref)*/ expr tail:(__ COMMA __ /*(func_call / column_ref)*/ expr)* {
       return createList(head, tail);
     }
 
@@ -821,12 +823,13 @@ ident_part  = [A-Za-z0-9$_] //allow "$" -DJ
 column_part  = [A-Za-z0-9_:]
 
 
+//allow mem_chain in param name -DJ
 param 
-  = l:(':' ident_name) { 
-    var p = {
+  = l:(':' ident_name) m:mem_chain { 
+    var p = Object.assign({
       type : 'param',
       value: l[1]
-    } 
+    }, m.length? { members: m}: {}); //kludge: unit tests don't like extra prop :(
     //var key = 'L' + line + 'C' + column;
     //debug(key);
     //params[key] = p;
@@ -1072,8 +1075,11 @@ KW_PROC      = "PROCEDURE"i //!ident_start   { return 'PROCEDURE'; }
 KW_FUNC      = "FUNCTION"i //!ident_start    { return 'FUNCTION'; }
 KW_BEGIN     = "BEGIN"i    //!ident_start    { return 'BEGIN';    }
 KW_END       = "END"i      //!ident_start    { return 'END';      }
+KW_OUT       = "OUT"i
+KW_INOUT     = "INOUT"i
+KW_PRAGMA    = "PRAGMA"i  //exception_init(cd_notfound,-1115);
 
-//specail character
+//special characters
 DOT       = '.'
 COMMA     = ','
 STAR      = '*'
@@ -1108,8 +1114,9 @@ proc_stmts
 
 //added proc/func keywds, ret type -DJ
 //procs don't have arg lists, but allow it here so parse rule can be shared -DJ
+//kludge: allow "()" on BEGIN and END to simplify proc call parsing -DJ
 proc_def
-  = __ t:(KW_PROC / KW_FUNC) __ name:ident m:mem_chain __ l:arg_list? __ r:(KW_RETURN __ data_type)? __ KW_IS __ v:proc_vars? __ KW_BEGIN __ s:start* __ KW_END {
+  = __ t:(KW_PROC / KW_FUNC) __ name:ident m:mem_chain __ l:arg_list? __ r:(KW_RETURN __ data_type)? __ KW_IS __ v:proc_vars? __ KW_BEGIN /*(__ LPAREN __ RPAREN)?*/ __ s:start* __ KW_END  /*( __ LPAREN __ RPAREN)?*/ {
     //based on proc_func_call example below
     varList.push(name); //push for analysis
     return {
@@ -1134,11 +1141,13 @@ arg_list
 //NO  / proc_stmt* //creates "infinite loop" error
   } 
 
+//added param direction -DJ
 arg_def
-  = name:ident_name __ type:data_type {
+  = name:ident_name __ dir:(KW_IN / KW_OUT / KW_INOUT)? __ type:data_type {
     return {
       type: 'arg_def',
       name: name,
+      direction: dir, //param direction
       datatype: type.typename,
       precision: type.precision,
     }
@@ -1162,6 +1171,7 @@ proc_vars
     }
   / proc_var __ SEMI?
 
+//ignore "pragma" stmts -DJ
 proc_var
   = v:(ident / var_decl / param) __ dt:data_type __ e:(KW_ASSIGN __ proc_expr)? {
     //push for analysis
@@ -1169,13 +1179,15 @@ proc_var
     return {
       type : 'proc_var',
       name : v,
-      data_type: dt.data_type,
+      data_type: dt.typename,
       data_prec: dt.precision,
       init: (e || [])[2],
     }
   }
+  / KW_PRAGMA __ func_call
 
 //allow proc call, other proc stmts -DJ
+//BROKEN-ignore extraneous BEGIN/END (can be nested) -DJ
 proc_stmt 
   = &{ varList = []; return true; } __ s:(assign_stmt / return_stmt / proc_func_call / proc_if / proc_def) {
 //TODO: maybe varList should not be cleared here? (proc_stmts can be recursive) -DJ
@@ -1184,6 +1196,10 @@ proc_stmt
         vars: varList
       }
     }
+/*
+    / (KW_BEGIN (__ SEMI?) __)?
+    / (KW_END (__ SEMI?) __)?
+*/
 
  KW_IF = 'if'i
  KW_THEN = 'then'i

@@ -179,8 +179,21 @@ union_stmt
       return head; 
     } 
 
+//add "select ... into"; must check this first -DJ
 select_stmt
-  =  select_stmt_nake
+  = KW_SELECT __
+    c:column_list_item     __  
+    KW_INTO __ v:(param / var_decl / ident) __
+    f:from_clause?      __
+    w:where_clause? {
+      return {
+        type      : 'select_into',
+        target    : v,
+        from      : f,
+        where     : w,
+      }      
+    }
+  /  select_stmt_nake
   / s:('(' __ select_stmt __ ')') {
       return s[2];
     }
@@ -196,6 +209,7 @@ extract_from_clause
       }
     }
 
+//add "having"; CAUTION: don't mess up unit tests -DJ
 select_stmt_nake
   = KW_SELECT           __ 
     d:KW_DISTINCT?      __
@@ -203,18 +217,20 @@ select_stmt_nake
     f:from_clause?      __
     w:where_clause?     __  
     g:group_by_clause?  __  
+    h:having_clause?     __  
     o:order_by_clause?  __
     l:limit_clause?  {
-      return {
+      return Object.assign({
         type      : 'select',
         distinct  : d,
         columns   : c,
         from      : f,
         where     : w,
         groupby   : g,
+//no        having    : h,
         orderby   : o,
         limit     : l
-      }
+      }, h? {having: h}: {}); //kludge: unit tests don't like extra null "having" prop :(
   }
 
 //allow extra "all" keyword in front of column list (don't treat as "*"): -DJ
@@ -334,16 +350,18 @@ on_clause
 
 where_clause 
   = KW_WHERE __ e:expr { return e; } 
-group_by_clause
-  = KW_GROUP __ KW_BY __ l:column_ref_list { return l; }
 
+group_by_clause
+  = KW_GROUP __ KW_BY /*&{ return DEBUG(5); }*/ __ l:column_ref_list { return l; }
+
+//allow func calls with col names; greedy match - must check func call first: -DJ
 column_ref_list
-  = head:column_ref tail:(__ COMMA __ column_ref)* {
+  = head:(func_call / column_ref) tail:(__ COMMA __ (func_call / column_ref))* {
       return createList(head, tail);
     }
 
 having_clause
-  = KW_HAVING e:expr { return e; }
+  = KW_HAVING __ e:expr { return e; }
 
 order_by_clause
   = KW_ORDER __ KW_BY __ l:order_by_list { return l; }
@@ -793,7 +811,7 @@ ident_name
 
 ident_start = [A-Za-z_]
 
-ident_part  = [A-Za-z0-9_]
+ident_part  = [A-Za-z0-9$_] //allow "$" -DJ
 
 //to support column name like `cf1:name` in hbase
 column_part  = [A-Za-z0-9_:]
@@ -839,10 +857,17 @@ aggr_fun_count
       }   
     }
 
+//allow "distinct(expr)": -DJ
 count_arg 
   = e:star_expr {
       return {
         expr  : e 
+      }
+    }
+  / d:KW_DISTINCT __ LPAREN __ c:expr __ RPAREN {
+      return {
+        distinct : d, 
+        expr   : c
       }
     }
   / d:KW_DISTINCT? __ c:column_ref {
@@ -1158,17 +1183,32 @@ proc_stmt
 
  KW_IF = 'if'i
  KW_THEN = 'then'i
+ KW_ELSIF = 'elsif'i
  KW_ELSE = 'else'i
  KW_ENDIF = KW_END __ KW_IF
 
 proc_if
-  = /*&{ return DEBUG(2); }*/ KW_IF __ e:proc_expr __ KW_THEN __ t:proc_stmts __ SEMI? __ f:(KW_ELSE __ proc_stmts __ SEMI?)? __ KW_ENDIF {
+  = /*&{ return DEBUG(2); }*/ KW_IF __ e:proc_expr __ KW_THEN __ t:proc_stmts __ SEMI? __ f:else_stmt? __ KW_ENDIF {
       return {
         stmt: "if",
         expr: e,
         then_stmt: t,
-        else_stmt: (f || [])[2], //optional
+        else_stmt: f, //(f || [])[2], //optional
       }
+    }
+
+else_stmt
+  = KW_ELSIF __ e:proc_expr __ KW_THEN __ t:proc_stmts __ SEMI? __ f:else_stmt? {
+      return {
+        stmt: "elsif",
+        expr: e,
+        then_stmt: t,
+        else_stmt: f,
+      };
+//      return createList(head, tail);
+    }
+  / KW_ELSE __ s:proc_stmts __ SEMI? {
+      return s;
     }
 
 //allow param -DJ

@@ -217,11 +217,12 @@ select_stmt_nake
       }
   }
 
+//allow extra "all" keyword in front of column list (don't treat as "*"): -DJ
 column_clause
-  = (KW_ALL / (STAR !ident_start)) {
+  = (/*KW_ALL /*/ (STAR !ident_start)) {
       return '*';
     }  
-  / head:column_list_item tail:(__ COMMA __ column_list_item)* {
+  / (KW_ALL __)? head:column_list_item tail:(__ COMMA __ column_list_item)* {
       return createList(head, tail);
     }
 
@@ -859,6 +860,7 @@ star_expr
       }
     }
 
+//mem_chain not needed here? -DJ
 func_call
   = name:ident __ LPAREN __ l:expr_list_or_empty __ RPAREN {
       return {
@@ -907,14 +909,16 @@ literal_string
       }
     }
 
+//allow newlines within quoted strings: -DJ
+//NOTE: need to preserve #alt branches in single/double _char for unit tests to pass
 single_char
-  = [^'\\\0-\x1F\x7f]
+  = /*&{ return DEBUG(4); }*/ ([^'\\\0-\x1F\x7f] / [\t\n] / "''" { return "'"; })
   / escape_char
 
 double_char
-  = [^"\\\0-\x1F\x7f]
-  / escape_char
-
+  = ([^"\\\0-\x1F\x7f] / [\t\n])
+/ escape_char
+  
 escape_char
   = "\\'"  { return "'";  }
   / '\\"'  { return '"';  }
@@ -929,6 +933,7 @@ escape_char
       return String.fromCharCode(parseInt("0x" + h1 + h2 + h3 + h4));
     }
 
+//NOTE: not used: -DJ
 line_terminator
   = [\n\r]
 
@@ -1166,9 +1171,9 @@ proc_if
       }
     }
 
-//allow param or var -DJ
+//allow param -DJ
 assign_stmt 
-  = va:(var_decl / param / ident_name) __ KW_ASSIGN __ e:proc_expr {
+  = va:(ident / var_decl / param) __ KW_ASSIGN /*&{ return DEBUG(5); }*/ __ e:proc_expr {
     return {
       type : 'assign',
       left : va,
@@ -1215,9 +1220,10 @@ proc_join
       }
     }
 
+//allow non-$ vars here -DJ
 proc_primary 
   = literal
-  / var_decl
+  / var_decl / ident
   / proc_func_call 
   / param
   / LPAREN __ e:proc_additive_expr __ RPAREN { 

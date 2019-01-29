@@ -25,6 +25,10 @@
 //disambiguate plain proc vars: -DJ
   reservedMap.BEGIN = true;
   reservedMap.END = true;
+//needed to disambiguate proc calls without "()": -DJ
+//  reservedMap.PROCEDURE = true;
+//  reservedMap.FUNCTION = true;
+//  reservedMap.IF = true;
 
 //allow in-line push: -DJ
   if (!Array.prototype.push_fluent)
@@ -128,8 +132,8 @@ require("colors").enabled = true; //for console output; https://github.com/Marak
 //  const sv_peg$buildStructuredError = peg$buildStructuredError;
   function peg$buildStructuredError(expected, found, location)
   {
-    console.log("max fail exp", peg$maxFailExpected);
-    console.log("max fail pos", peg$maxFailPos, "line", input.slice(0, peg$maxFailPos).split(/\n/).length, highlight(input, peg$maxFailPos, 20));
+    console.log("fail exp", peg$maxFailExpected);
+    console.log("fail pos", peg$maxFailPos, "line", input.slice(0, peg$maxFailPos).split(/\n/).length, highlight(input, peg$maxFailPos, 20));
 //    return sv_peg$buildStructuredError.apply(null, arguments);
     return new peg$SyntaxError(
       peg$SyntaxError.buildMessage(expected, found),
@@ -1109,7 +1113,7 @@ proc_def
     //based on proc_func_call example below
     varList.push(name); //push for analysis
     return {
-      type : t.slice(0, 4) + "_def",
+      type : t.slice(0, 4).toLowerCase() + "_def",
       name : name, 
       members : m,
 //      args : {
@@ -1271,18 +1275,37 @@ proc_primary
       return e; 
     } 
 
-//allow mem_chain -DJ
+//allow mem_chain, make arg list optional -DJ
 proc_func_call
-  = name:ident m:mem_chain __ LPAREN __ l:proc_primary_list __ RPAREN {
+  = name:ident m:mem_chain __ LPAREN __ args:proc_primary_list_or_empty __ RPAREN __ {
       //compatible with original func_call
       return {
-        type : 'function',
+        type : "func_call", //'function',
         name : name, 
         members: m,
         args : {
           type  : 'expr_list',
-          value : l
+          value : args, //(args || [])[2], //optional
         }
+      }
+    }
+/*BROKEN
+  / name:ident m:mem_chain __ SEMI {
+      //compatible with original func_call
+      return {
+        type : "func_call", //'function',
+        name : name, 
+        members: m,
+      }
+    }
+*/
+
+proc_primary_list_or_empty
+  = proc_primary_list
+  / "" {
+      return { 
+        type  : 'expr_list',
+        value : []
       }
     }
 

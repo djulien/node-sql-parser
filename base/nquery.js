@@ -852,7 +852,7 @@ function peg$parse(input, options) {
           //based on proc_func_call example below
           varList.push(name); //push for analysis
           return {
-            type : t.slice(0, 4) + "_def",
+            type : t.slice(0, 4).toLowerCase() + "_def",
             name : name, 
             members : m,
       //      args : {
@@ -957,15 +957,15 @@ function peg$parse(input, options) {
               on      : expr
             }
           },
-      peg$c355 = function(name, m, l) {
+      peg$c355 = function(name, m, args) {
             //compatible with original func_call
             return {
-              type : 'function',
+              type : "func_call", //'function',
               name : name, 
               members: m,
               args : {
                 type  : 'expr_list',
-                value : l
+                value : args, //(args || [])[2], //optional
               }
             }
           },
@@ -10305,7 +10305,7 @@ function peg$parse(input, options) {
   }
 
   function peg$parseproc_func_call() {
-    var s0, s1, s2, s3, s4, s5, s6, s7, s8;
+    var s0, s1, s2, s3, s4, s5, s6, s7, s8, s9;
 
     s0 = peg$currPos;
     s1 = peg$parseident();
@@ -10318,15 +10318,21 @@ function peg$parse(input, options) {
           if (s4 !== peg$FAILED) {
             s5 = peg$parse__();
             if (s5 !== peg$FAILED) {
-              s6 = peg$parseproc_primary_list();
+              s6 = peg$parseproc_primary_list_or_empty();
               if (s6 !== peg$FAILED) {
                 s7 = peg$parse__();
                 if (s7 !== peg$FAILED) {
                   s8 = peg$parseRPAREN();
                   if (s8 !== peg$FAILED) {
-                    peg$savedPos = s0;
-                    s1 = peg$c355(s1, s2, s6);
-                    s0 = s1;
+                    s9 = peg$parse__();
+                    if (s9 !== peg$FAILED) {
+                      peg$savedPos = s0;
+                      s1 = peg$c355(s1, s2, s6);
+                      s0 = s1;
+                    } else {
+                      peg$currPos = s0;
+                      s0 = peg$FAILED;
+                    }
                   } else {
                     peg$currPos = s0;
                     s0 = peg$FAILED;
@@ -10358,6 +10364,23 @@ function peg$parse(input, options) {
     } else {
       peg$currPos = s0;
       s0 = peg$FAILED;
+    }
+
+    return s0;
+  }
+
+  function peg$parseproc_primary_list_or_empty() {
+    var s0, s1;
+
+    s0 = peg$parseproc_primary_list();
+    if (s0 === peg$FAILED) {
+      s0 = peg$currPos;
+      s1 = peg$c53;
+      if (s1 !== peg$FAILED) {
+        peg$savedPos = s0;
+        s1 = peg$c54();
+      }
+      s0 = s1;
     }
 
     return s0;
@@ -10634,6 +10657,10 @@ function peg$parse(input, options) {
   //disambiguate plain proc vars: -DJ
     reservedMap.BEGIN = true;
     reservedMap.END = true;
+  //needed to disambiguate proc calls without "()": -DJ
+  //  reservedMap.PROCEDURE = true;
+  //  reservedMap.FUNCTION = true;
+  //  reservedMap.IF = true;
 
   //allow in-line push: -DJ
     if (!Array.prototype.push_fluent)
@@ -10737,8 +10764,8 @@ function peg$parse(input, options) {
   //  const sv_peg$buildStructuredError = peg$buildStructuredError;
     function peg$buildStructuredError(expected, found, location)
     {
-      console.log("max fail exp", peg$maxFailExpected);
-      console.log("max fail pos", peg$maxFailPos, "line", input.slice(0, peg$maxFailPos).split(/\n/).length, highlight(input, peg$maxFailPos, 20));
+      console.log("fail exp", peg$maxFailExpected);
+      console.log("fail pos", peg$maxFailPos, "line", input.slice(0, peg$maxFailPos).split(/\n/).length, highlight(input, peg$maxFailPos, 20));
   //    return sv_peg$buildStructuredError.apply(null, arguments);
       return new peg$SyntaxError(
         peg$SyntaxError.buildMessage(expected, found),

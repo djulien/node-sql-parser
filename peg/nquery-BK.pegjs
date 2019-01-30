@@ -127,9 +127,6 @@
   //used for dependency analysis
   var varList = [];
 
-  var verb_stk = []; //track what can happen to col or var refs -DJ
-  var ctx_stk = []; //track cols/vars used in expr, func/proc, etc -DJ
-
 //wedge debug info: -DJ
 //require("magic-globals");
 require("colors").enabled = true; //for console output; https://github.com/Marak/colors.js/issues/127
@@ -165,15 +162,14 @@ require("colors").enabled = true; //for console output; https://github.com/Marak
 //added "debugger" for easier debug -DJ
 //allow trailing white space and ";" -DJ
 start 
-  = __ "ALT" __ alt:ALT_grammar { return alt; } //experimental; use prefix keywd to avoid impact to existing unit tests -DJ
-  / &{ params = []; DEBUG(1); return true; } __ ast:(union_stmt  / update_stmt / replace_insert_stmt ) __ SEMI? __ {
+  = &{ params = []; DEBUG(1); return true; } __ ast:(union_stmt  / update_stmt / replace_insert_stmt ) __ SEMI? __ {
 //TODO: maybe params should not be cleared here? (proc_stmts can be recursive) -DJ
       return {
         ast   : ast,
         param : params
       } 
     } 
-  / ast:proc_stmts __ SEMI? __ {
+    /ast:proc_stmts __ SEMI? __ {
       return {
         ast : ast  
       }
@@ -1368,150 +1364,3 @@ mem_chain
  KW_RETURN = 'return'i
 
  KW_ASSIGN = ':='
-
-
-/////////////////////////////////////////////////////////////////////////////////
-////
-/// alteranate grammar based on https://github.com/antlr/grammars-v4/blob/master/plsql/PlSqlParser.g4
-//
-
-ALT_grammar
-//  = ((unit_statement | sql_plus_command) SEMICOLON?)* EOF
-  = &{ params = []; DEBUG(0); return true; } stmts:(ALT_unit_statement SEMI?)* //EOF
-    {
-      return {
-        ast: stmts.map((stmt) => stmt[0]),
-        params: params,
-      };
-    }
-
-ALT_unit_statement
-//    : transaction_control_statements
-//    | alter_cluster
-//    | alter_database
-//    | alter_function
-//    | alter_package
-//    | alter_procedure
-//    | alter_sequence
-//    | alter_session
-//    | alter_trigger
-//    | alter_type
-//    | alter_table
-//    | alter_tablespace
-//    | alter_index
-//    | alter_library
-//    | alter_materialized_view
-//    | alter_materialized_view_log
-//    | alter_user
-//    | alter_view
-//
-//    | analyze
-//    | associate_statistics
-//    | audit_traditional
-//    | unified_auditing
-//
-//    | create_function_body
-  = ALT_create_function_body
-//    | create_procedure_body
-  / ALT_create_procedure_body
-//    | create_package
-//    | create_package_body
-//
-//    | create_index
-//    | create_table
-//    | create_tablespace
-//    | create_cluster
-//    | create_context
-//    | create_view //TODO
-//    | create_directory
-//    | create_materialized_view
-//    | create_materialized_view_log
-//    | create_user
-//
-//    | create_sequence
-//    | create_trigger
-//    | create_type
-//    | create_synonym
-//
-//    | drop_function
-//    | drop_package
-//    | drop_procedure
-//    | drop_sequence
-//    | drop_trigger
-//    | drop_type
-//    | data_manipulation_language_statements
-  / ALT_data_manipulation_language_statements
-//    | drop_table
-//    | drop_index
-//
-//    | comment_on_column
-//    | comment_on_table
-//
-//    | anonymous_block
-  / ALT_anonymous_block
-//
-//    | grant_statement
-//
-//    | procedure_call
-  / ALT_procedure_call
-//    ;
-
-
-/////////////////////////////////////////////////////////////////////////////////
-
-TODO
-  = "?"
-
-ALT_create_function_body
-//    : CREATE (OR REPLACE)? FUNCTION function_name ('(' (','? parameter)+ ')')?
-//      RETURN type_spec (invoker_rights_clause | parallel_enable_clause | result_cache_clause | DETERMINISTIC)*
-//      ((PIPELINED? (IS | AS) (DECLARE? seq_of_declare_specs? body | call_spec)) | (PIPELINED | AGGREGATE) USING implementation_type_name) ';'
-//    ;
-    = TODO "func" __ { return {type: "func"}; }
-
-ALT_create_procedure_body
-//    : CREATE (OR REPLACE)? PROCEDURE procedure_name ('(' parameter (',' parameter)* ')')?
-//      invoker_rights_clause? (IS | AS)
-//      (DECLARE? seq_of_declare_specs? body | call_spec | EXTERNAL) ';'
-    = TODO "proc" __ { return {type: "proc"}; }
-
-ALT_data_manipulation_language_statements
-//    : merge_statement
-//    | lock_table_statement
-//    | select_statement
-    = ALT_select_statement
-//    | update_statement
-    / ALT_update_statement
-//    | delete_statement
-    / ALT_delete_statement
-//    | insert_statement
-    / ALT_insert_statement
-//    | explain_statement
-//    ;
-
-ALT_anonymous_block
-//    : (DECLARE seq_of_declare_specs)? BEGIN seq_of_statements (EXCEPTION exception_handler+)? END SEMICOLON
-//    ;
-  = TODO "anon" __ { return {type: "anon"}; }
-
-ALT_procedure_call
-//    : routine_name function_argument?
-//    ;
-  = TODO "call" __ { return {type: "call"}; }
-
-
-//////////////////////////////////////////////////////////////////////////////////
-
-ALT_select_statement
-  = TODO "sel" &{ verb_stk.push("select"); return true; } __ { verb_stk.pop(); return {type: "sel"}; }
-
-ALT_update_statement
-  = TODO "upd" &{ verb_stk.push("update"); return true; } __ { verb_stk.pop(); return {type: "upd"}; }
-
-ALT_delete_statement
-  = TODO "del" &{ verb_stk.push("delete"); return true; } __ { verb_stk.pop(); return {type: "del"}; }
-
-ALT_insert_statement
-  = TODO "ins" &{ verb_stk.push("insert"); return true; } __ { verb_stk.pop(); return {type: "ins"}; }
-
-//eof

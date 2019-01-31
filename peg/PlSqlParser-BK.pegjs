@@ -34,7 +34,7 @@ sql_script
     = ((unit_statement  /  sql_plus_command) SEMICOLON?)* EOF
      //;
 
-//commented out unneeded stmts -DJ
+//commented out unneeded stuff -DJ
 unit_statement = "DUMMY"
 //    = transaction_control_statements
 //     /  alter_cluster

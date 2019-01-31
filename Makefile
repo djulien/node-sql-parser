@@ -20,7 +20,7 @@ plsql.pegjs: peg/PlSql*.g4
 	peg/ant2peg.js peg/PlSqlParser.g4 > peg/PlSqlParser.pegjs
 #	#manual fixups (comment out stuff near top)
 
-plsql: peg/PlSql*.g4 peg/*.pegjs plsql.pegjs
+plsql: peg/PlSql*.g4 peg/*.pegjs
 #	ls peg/PlSql*[!BK].pegjs
 	@cat peg/PlSql*[!BK].pegjs > peg/plsql.pegjs
 	./node_modules/pegjs/bin/pegjs -o ./base/plsql.js peg/plsql.pegjs

@@ -30,7 +30,7 @@ options {
 }
 
 sql_script
-    : ((unit_statement | sql_plus_command) SEMICOLON?)* EOF
+    : { return start_rule(); } ((unit_statement | sql_plus_command) SEMICOLON?)* EOF
     ;
 
 //commented out unneeded stuff -DJ
@@ -2891,8 +2891,10 @@ invoker_rights_clause
     : AUTHID (CURRENT_USER | DEFINER)
     ;
 
+//commented out unneeded stuff -DJ
 call_spec
-    : LANGUAGE (java_spec | c_spec)
+//    : LANGUAGE (java_spec | c_spec)
+    : "CALL-SPEC-not-needed"
     ;
 
 // Call Spec Specific Clauses
@@ -3111,11 +3113,11 @@ return_statement
     ;
 
 function_call
-    : CALL? routine_name function_argument?
+    : CALL? { return verb("func_call"); } routine_name function_argument?
     ;
 
 procedure_call
-    : routine_name function_argument?
+    : { return verb("proc_call"); } routine_name function_argument?
     ;
 
 pipe_row_statement
@@ -3141,11 +3143,12 @@ block
 
 // SQL Statements
 
+//commented out unneeded stuff -DJ
 sql_statement
     : execute_immediate
     | data_manipulation_language_statements
     | cursor_manipulation_statements
-    | transaction_control_statements
+//    | transaction_control_statements
     ;
 
 execute_immediate
@@ -3160,14 +3163,15 @@ dynamic_returning_clause
 
 // DML Statements
 
+//commented out unneeded stuff -DJ
 data_manipulation_language_statements
-    : merge_statement
-    | lock_table_statement
-    | select_statement
+//    : merge_statement
+//    | lock_table_statement
+    : select_statement
     | update_statement
     | delete_statement
     | insert_statement
-    | explain_statement
+//    | explain_statement
     ;
 
 // Cursor Manipulation Statements
@@ -3297,7 +3301,7 @@ subquery_operation_part
     ;
 
 query_block
-    : SELECT (DISTINCT | UNIQUE | ALL)? (ASTERISK | (','? selected_element)+)
+    : SELECT { return verb("select"); } (DISTINCT | UNIQUE | ALL)? (ASTERISK | (','? selected_element)+)
       into_clause? from_clause where_clause? hierarchical_query_clause? group_by_clause? model_clause?
     ;
 
@@ -3323,8 +3327,9 @@ table_ref_list
 // according to he reality it is. Here we probably apply pivot/unpivot onto whole join clause
 // eventhough it is not enclosed in parenthesis. See pivot examples 09,10,11
 
+//commented out unneeded stuff -DJ
 table_ref
-    : table_ref_aux join_clause* (pivot_clause | unpivot_clause)?
+    : table_ref_aux join_clause* // (pivot_clause | unpivot_clause)?
     ;
 
 table_ref_aux
@@ -3332,9 +3337,10 @@ table_ref_aux
     ;
 
 //non-standard comments? -DJ
+//commented out unneeded stuff -DJ
 table_ref_aux_internal
-    : dml_table_expression_clause (pivot_clause | unpivot_clause)?                //# table_ref_aux_internal_one
-    | '(' table_ref subquery_operation_part* ')' (pivot_clause | unpivot_clause)?  //# table_ref_aux_internal_two
+    : dml_table_expression_clause // (pivot_clause | unpivot_clause)?                //# table_ref_aux_internal_one
+    | '(' table_ref subquery_operation_part* ')' // (pivot_clause | unpivot_clause)?  //# table_ref_aux_internal_two
     | ONLY '(' dml_table_expression_clause ')'                                     //# table_ref_aux_internal_three
     ;
 
@@ -3533,7 +3539,7 @@ for_update_options
     ;
 
 update_statement
-    : UPDATE general_table_ref update_set_clause where_clause? static_returning_clause? error_logging_clause?
+    : UPDATE { return verb("update"); } general_table_ref update_set_clause where_clause? static_returning_clause? error_logging_clause?
     ;
 
 // Update Specific Clauses
@@ -3549,11 +3555,11 @@ column_based_update_set_clause
     ;
 
 delete_statement
-    : DELETE FROM? general_table_ref where_clause? static_returning_clause? error_logging_clause?
+    : DELETE { return verb("delete"); }FROM? general_table_ref where_clause? static_returning_clause? error_logging_clause?
     ;
 
 insert_statement
-    : INSERT (single_table_insert | multi_table_insert)
+    : INSERT { return verb("insert"); } (single_table_insert | multi_table_insert)
     ;
 
 // Insert Specific Clauses
@@ -3883,44 +3889,45 @@ numeric_function
    | GREATEST '(' expressions ')'
    ;
 
+//commented out unneeded stuff -DJ
 other_function
     : over_clause_keyword function_argument_analytic over_clause?
     | /*TODO stantard_function_enabling_using*/ regular_id function_argument_modeling using_clause?
     | COUNT '(' ( ASTERISK | (DISTINCT | UNIQUE | ALL)? concatenation) ')' over_clause?
     | (CAST | XMLCAST) '(' (MULTISET '(' subquery ')' | concatenation) AS type_spec ')'
-    | COALESCE '(' table_element (',' (numeric | quoted_string))? ')'
-    | COLLECT '(' (DISTINCT | UNIQUE)? concatenation collect_order_by_part? ')'
-    | within_or_over_clause_keyword function_argument within_or_over_part+
+//    | COALESCE '(' table_element (',' (numeric | quoted_string))? ')'
+//    | COLLECT '(' (DISTINCT | UNIQUE)? concatenation collect_order_by_part? ')'
+//    | within_or_over_clause_keyword function_argument within_or_over_part+
     | cursor_name ( PERCENT_ISOPEN | PERCENT_FOUND | PERCENT_NOTFOUND | PERCENT_ROWCOUNT )
-    | DECOMPOSE '(' concatenation (CANONICAL | COMPATIBILITY)? ')'
-    | EXTRACT '(' regular_id FROM concatenation ')'
+//    | DECOMPOSE '(' concatenation (CANONICAL | COMPATIBILITY)? ')'
+//    | EXTRACT '(' regular_id FROM concatenation ')'
     | (FIRST_VALUE | LAST_VALUE) function_argument_analytic respect_or_ignore_nulls? over_clause
-    | standard_prediction_function_keyword
+//    | standard_prediction_function_keyword
       '(' expressions cost_matrix_clause? using_clause? ')'
     | TRANSLATE '(' expression (USING (CHAR_CS | NCHAR_CS))? (',' expression)* ')'
-    | TREAT '(' expression AS REF? type_spec ')'
+//    | TREAT '(' expression AS REF? type_spec ')'
     | TRIM '(' ((LEADING | TRAILING | BOTH)? quoted_string? FROM)? concatenation ')'
-    | XMLAGG '(' expression order_by_clause? ')' ('.' general_element_part)?
-    | (XMLCOLATTVAL | XMLFOREST)
-      '(' (','? xml_multiuse_expression_element)+ ')' ('.' general_element_part)?
-    | XMLELEMENT
-      '(' (ENTITYESCAPING | NOENTITYESCAPING)? (NAME | EVALNAME)? expression
-       (/*TODO{input.LT(2).getText().equalsIgnoreCase("xmlattributes")}?*/ ',' xml_attributes_clause)?
-       (',' expression column_alias?)* ')' ('.' general_element_part)?
-    | XMLEXISTS '(' expression xml_passing_clause? ')'
-    | XMLPARSE '(' (DOCUMENT | CONTENT) concatenation WELLFORMED? ')' ('.' general_element_part)?
-    | XMLPI
-      '(' (NAME identifier | EVALNAME concatenation) (',' concatenation)? ')' ('.' general_element_part)?
-    | XMLQUERY
-      '(' concatenation xml_passing_clause? RETURNING CONTENT (NULL_ ON EMPTY)? ')' ('.' general_element_part)?
-    | XMLROOT
-      '(' concatenation (',' xmlroot_param_version_part)? (',' xmlroot_param_standalone_part)? ')' ('.' general_element_part)?
-    | XMLSERIALIZE
-      '(' (DOCUMENT | CONTENT) concatenation (AS type_spec)?
-      xmlserialize_param_enconding_part? xmlserialize_param_version_part? xmlserialize_param_ident_part? ((HIDE | SHOW) DEFAULTS)? ')'
-      ('.' general_element_part)?
-    | XMLTABLE
-      '(' xml_namespaces_clause? concatenation xml_passing_clause? (COLUMNS xml_table_column (',' xml_table_column))? ')' ('.' general_element_part)?
+//    | XMLAGG '(' expression order_by_clause? ')' ('.' general_element_part)?
+//    | (XMLCOLATTVAL | XMLFOREST)
+//      '(' (','? xml_multiuse_expression_element)+ ')' ('.' general_element_part)?
+//    | XMLELEMENT
+//      '(' (ENTITYESCAPING | NOENTITYESCAPING)? (NAME | EVALNAME)? expression
+//       (/*TODO{input.LT(2).getText().equalsIgnoreCase("xmlattributes")}?*/ ',' xml_attributes_clause)?
+//       (',' expression column_alias?)* ')' ('.' general_element_part)?
+//    | XMLEXISTS '(' expression xml_passing_clause? ')'
+//    | XMLPARSE '(' (DOCUMENT | CONTENT) concatenation WELLFORMED? ')' ('.' general_element_part)?
+//    | XMLPI
+//      '(' (NAME identifier | EVALNAME concatenation) (',' concatenation)? ')' ('.' general_element_part)?
+//    | XMLQUERY
+//      '(' concatenation xml_passing_clause? RETURNING CONTENT (NULL_ ON EMPTY)? ')' ('.' general_element_part)?
+//    | XMLROOT
+//      '(' concatenation (',' xmlroot_param_version_part)? (',' xmlroot_param_standalone_part)? ')' ('.' general_element_part)?
+//    | XMLSERIALIZE
+//      '(' (DOCUMENT | CONTENT) concatenation (AS type_spec)?
+//      xmlserialize_param_enconding_part? xmlserialize_param_version_part? xmlserialize_param_ident_part? ((HIDE | SHOW) DEFAULTS)? ')'
+//      ('.' general_element_part)?
+//    | XMLTABLE
+//      '(' xml_namespaces_clause? concatenation xml_passing_clause? (COLUMNS xml_table_column (',' xml_table_column))? ')' ('.' general_element_part)?
     ;
 
 over_clause_keyword
@@ -4054,14 +4061,16 @@ xmlserialize_param_ident_part
 
 // SqlPlus
 
+//commented out unneeded stuff -DJ
 sql_plus_command
     : '/'
     | EXIT
     | PROMPT_MESSAGE
     | SHOW (ERR | ERRORS)
     | START_CMD
-    | whenever_command
-    | set_command
+//    | whenever_command
+//    | set_command
+    | sql_statement //allow immediate commands -DJ
     ;
 
 whenever_command
@@ -4130,7 +4139,7 @@ schema_name
     ;
 
 routine_name
-    : identifier ('.' id_expression)* ('@' link_name)?
+    : head=identifier tail=('.' id_expression)* ('@' link_name)? { return funcref(makename(head, tail, [1])); } /*keep*/
     ;
 
 package_name
@@ -4234,11 +4243,11 @@ link_name
     ;
 
 column_name
-    : identifier ('.' id_expression)*
+    : head=identifier tail=('.' id_expression)* { return colref(multiname(head, tail, [1])); } /*keep*/
     ;
 
 tableview_name
-    : identifier ('.' id_expression)?
+    : head=identifier tail=('.' id_expression)? { return tblref(multiname(head, tail, 1)); } /*keep*/
       ('@' link_name | /*TODO{!(input.LA(2) == BY)}?*/ partition_extension_clause)?
     ;
 
@@ -4574,27 +4583,28 @@ outer_join_sign
     : '(' '+' ')'
     ;
 
+//commented out unneeded stuff -DJ
 regular_id
-    : non_reserved_keywords_pre12c
-    | non_reserved_keywords_in_12c
-    | REGULAR_ID
+//    : non_reserved_keywords_pre12c
+//    | non_reserved_keywords_in_12c
+    : REGULAR_ID
     | A_LETTER
-    | AGENT
+//    | AGENT
     | AGGREGATE
-    | ANALYZE
-    | AUTONOMOUS_TRANSACTION
-    | BATCH
-    | BINARY_INTEGER
+//    | ANALYZE
+//    | AUTONOMOUS_TRANSACTION
+//    | BATCH
+//    | BINARY_INTEGER
     | BOOLEAN
-    | C_LETTER
+//    | C_LETTER
     | CHAR
-    | CLUSTER
-    | CONSTRUCTOR
-    | CUSTOMDATUM
+//    | CLUSTER
+//    | CONSTRUCTOR
+//    | CUSTOMDATUM
     | DECIMAL
     | DELETE
-    | DETERMINISTIC
-    | DSINTERVAL_UNCONSTRAINED
+//    | DETERMINISTIC
+//    | DSINTERVAL_UNCONSTRAINED
     | ERR
     | EXCEPTION
     | EXCEPTION_INIT
@@ -4605,17 +4615,17 @@ regular_id
     | INDICES
     | INOUT
     | INTEGER
-    | LANGUAGE
+//    | LANGUAGE
     | LONG
-    | LOOP
+//    | LOOP
     | NUMBER
-    | ORADATA
+//    | ORADATA
     | OSERROR
     | OUT
-    | OVERRIDING
-    | PARALLEL_ENABLE
-    | PIPELINED
-    | PLS_INTEGER
+//    | OVERRIDING
+//    | PARALLEL_ENABLE
+//    | PIPELINED
+//    | PLS_INTEGER
     | POSITIVE
     | POSITIVEN
     | PRAGMA
@@ -4624,10 +4634,10 @@ regular_id
     | RECORD
     | REF
     | RENAME
-    | RESTRICT_REFERENCES
+//    | RESTRICT_REFERENCES
     | RESULT
-    | SELF
-    | SERIALLY_REUSABLE
+//    | SELF
+//    | SERIALLY_REUSABLE
     | SET
     | SIGNTYPE
     | SIMPLE_INTEGER
@@ -4635,20 +4645,20 @@ regular_id
     | SQLDATA
     | SQLERROR
     | SUBTYPE
-    | TIMESTAMP_LTZ_UNCONSTRAINED
-    | TIMESTAMP_TZ_UNCONSTRAINED
-    | TIMESTAMP_UNCONSTRAINED
+//    | TIMESTAMP_LTZ_UNCONSTRAINED
+//    | TIMESTAMP_TZ_UNCONSTRAINED
+//    | TIMESTAMP_UNCONSTRAINED
     | TRIGGER
     | VARCHAR
     | VARCHAR2
     | VARIABLE
     | WARNING
     | WHILE
-    | XMLAGG
-    | YMINTERVAL_UNCONSTRAINED
-    | REGR_
+//    | XMLAGG
+//    | YMINTERVAL_UNCONSTRAINED
+//    | REGR_
     | VAR_
-    | COVAR_
+//    | COVAR_
     ;
 
 non_reserved_keywords_in_12c

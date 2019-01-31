@@ -1375,9 +1375,11 @@ mem_chain
 /// alteranate grammar based on https://github.com/antlr/grammars-v4/blob/master/plsql/PlSqlParser.g4
 //
 
+ALT_SEMI = ';' ALT_SPACE?
+
 ALT_grammar
 //  = ((unit_statement | sql_plus_command) SEMICOLON?)* EOF
-  = &{ params = []; DEBUG(0); return true; } stmts:(ALT_unit_statement SEMI?)* //EOF
+  = &{ params = []; DEBUG(0); return true; } stmts:(ALT_unit_statement ALT_SEMI?)* //EOF
     {
       return {
         ast: stmts.map((stmt) => stmt[0]),
@@ -1459,15 +1461,33 @@ ALT_unit_statement
 
 /////////////////////////////////////////////////////////////////////////////////
 
-TODO
-  = "?"
+TODO = "?"
+
+ALT_CREATE = "create"i !ident ALT_SPACE?
+ALT_OR = "or"i !ident ALT_SPACE?
+ALT_REPLACE = "replace"i !ident ALT_SPACE?
+ALT_FUNCTION = "function"i !ident ALT_SPACE?
+ALT_RETURN = "return"i !ident ALT_SPACE?
+ALT_IS = "is"i !ident ALT_SPACE?
+ALT_AS = "as"i !ident ALT_SPACE?
+ALT_DECLARE = "declare"i !ident ALT_SPACE?
+ALT_LPAREN = '(' ALT_SPACE?
+ALT_RPAREN = ')' ALT_SPACE?
+ALT_COMMA = ',' ALT_SPACE?
 
 ALT_create_function_body
 //    : CREATE (OR REPLACE)? FUNCTION function_name ('(' (','? parameter)+ ')')?
 //      RETURN type_spec (invoker_rights_clause | parallel_enable_clause | result_cache_clause | DETERMINISTIC)*
 //      ((PIPELINED? (IS | AS) (DECLARE? seq_of_declare_specs? body | call_spec)) | (PIPELINED | AGGREGATE) USING implementation_type_name) ';'
 //    ;
-    = TODO "func" __ { return {type: "func"}; }
+//    = TODO "func" __ { return {type: "func"}; }
+    = ALT_CREATE (ALT_OR ALT_REPLACE)? ALT_FUNCTION ALT_function_name (ALT_LPAREN ALT_parameter (ALT_COMMA ALT_parameter)* ALT_RPAREN)?
+      ALT_RETURN ALT_type_spec
+      (ALT_IS / ALT_AS) ALT_DECLARE? ALT_seq_of_declare_specs? ALT_body ALT_SEMI {
+        return {
+          type: "func_def",
+        };
+      }
 
 ALT_create_procedure_body
 //    : CREATE (OR REPLACE)? PROCEDURE procedure_name ('(' parameter (',' parameter)* ')')?
@@ -1513,5 +1533,170 @@ ALT_delete_statement
 
 ALT_insert_statement
   = TODO "ins" &{ verb_stk.push("insert"); return true; } __ { verb_stk.pop(); return {type: "ins"}; }
+
+
+/////////////////////////////////////////////////////////////////////////////////
+
+//put optional trailing whitespace on tokens to reduce clutter in grammar rules
+
+//ALT_INTRODUCER = '_'
+ALT_NEWLINE_EOF = ALT_NEWLINE / EOF
+ALT_QUESTION_MARK = '?'
+ALT_SIMPLE_LETTER = [A-Za-z]
+ALT_FLOAT_FRAGMENT = ALT_UNSIGNED_INTEGER* '.'? ALT_UNSIGNED_INTEGER+ ALT_SPACE?
+ALT_UNSIGNED_INTEGER = [0-9]+
+ALT_NEWLINE = '\r'? '\n'
+ALT_SPACE = [ \t]+
+ALT_DELIMITED_ID = '"' (![*\r\n] / '"' '"')+ '"' ALT_SPACE?
+ALT_REGULAR_ID = ALT_SIMPLE_LETTER (ALT_SIMPLE_LETTER / '$' / '_' / '#' / [0-9])* ALT_SPACE?
+ALT_DOT = '.' ALT_SPACE?
+ALT_IN = "in"i !ident ALT_SPACE?
+ALT_OUT = "out"i !ident ALT_SPACE?
+ALT_INOUT = "inout"i !ident ALT_SPACE?
+ALT_NOCOPY = "nocopy"i !ident ALT_SPACE?
+ALT_EXCEPTION = "exception"i !ident ALT_SPACE?
+ALT_END = "end"i !ident ALT_SPACE?
+ALT_ASSIGN_OP = ':=' ALT_SPACE?
+ALT_DEFAULT = "default"i !ident ALT_SPACE?
+
+ALT_function_name
+//    : identifier ('.' id_expression)?
+//    ;
+  = ALT_identifier (ALT_DOT ALT_id_expression)?
+
+ALT_identifier
+//    : (INTRODUCER char_set_name)? id_expression
+//    ;
+  = /*(ALT_INTRODUCER char_set_name)?*/ ALT_id_expression
+
+ALT_parameter_name
+  = ALT_identifier
+
+ALT_id_expression
+//    : regular_id
+//    | DELIMITED_ID
+//    ;
+  = ALT_REGULAR_ID / ALT_DELIMITED_ID
+
+ALT_parameter
+//    : parameter_name (IN | OUT | INOUT | NOCOPY)* type_spec? default_value_part?
+//    ;
+  = ALT_parameter_name (ALT_IN / ALT_OUT / ALT_INOUT / ALT_NOCOPY)* ALT_type_spec? ALT_default_value_part?
+
+ALT_type_spec
+//    : datatype
+//    | REF? type_name (PERCENT_ROWTYPE | PERCENT_TYPE)?
+//    ;
+  = ALT_datatype
+
+ALT_default_value_part
+  = (ALT_ASSIGN_OP / ALT_DEFAULT) ALT_expression
+
+ALT_datatype
+//    : native_datatype_element precision_part? (WITH LOCAL? TIME ZONE | CHARACTER SET char_set_name)?
+//    | INTERVAL (YEAR | DAY) ('(' expression ')')? TO (MONTH | SECOND) ('(' expression ')')?
+//    ;
+  = ALT_native_datatype_element ALT_precision_part? //(WITH LOCAL? TIME ZONE | CHARACTER SET char_set_name)?
+
+ALT_precision_part
+//    : '(' (numeric | ASTERISK) (',' numeric)? (CHAR | BYTE)? ')'
+//    ;
+  = ALT_LPAREN (ALT_numeric / ALT_ASTERISK) (ALT_COMMA ALT_numeric)? (ALT_CHAR / ALT_BYTE)? ALT_RPAREN
+
+ALT_seq_of_declare_specs
+//    : declare_spec+
+//    ;
+  = ALT_declare_spec+
+  
+ALT_declare_spec
+//    : pragma_declaration
+//    | variable_declaration
+//    | subtype_declaration
+//    | cursor_declaration
+//    | exception_declaration
+//    | type_declaration
+//    | procedure_spec
+//    | function_spec
+//    | procedure_body
+//    | function_body
+//    ;
+  = ALT_pragma_declaration
+  / ALT_variable_declaration
+  / ALT_subtype_declaration
+  / ALT_cursor_declaration
+  / ALT_exception_declaration
+  / ALT_type_declaration
+  / ALT_procedure_spec
+  / ALT_function_spec
+  / ALT_procedure_body
+  / ALT_function_body
+
+ALT_body
+//    : BEGIN seq_of_statements (EXCEPTION exception_handler+)? END label_name?
+//    ;
+  = ALT_BEGIN ALT_seq_of_statements (ALT_EXCEPTION ALT_exception_handler+)? ALT_END ALT_label_name?
+
+
+ALT_native_datatype_element
+//    : BINARY_INTEGER
+//    | PLS_INTEGER
+//    | NATURAL
+//    | BINARY_FLOAT
+//    | BINARY_DOUBLE
+//    | NATURALN
+//    | POSITIVE
+//    | POSITIVEN
+//    | SIGNTYPE
+//    | SIMPLE_INTEGER
+//    | NVARCHAR2
+//    | DEC
+//    | INTEGER
+//    | INT
+//    | NUMERIC
+//    | SMALLINT
+//    | NUMBER
+//    | DECIMAL
+//    | DOUBLE PRECISION?
+//    | FLOAT
+//    | REAL
+//    | NCHAR
+//    | LONG RAW?
+//    | CHAR
+//    | CHARACTER
+//    | VARCHAR2
+//    | VARCHAR
+//    | STRING
+//    | RAW
+//    | BOOLEAN
+//    | DATE
+//    | ROWID
+//    | UROWID
+//    | YEAR
+//    | MONTH
+//    | DAY
+//    | HOUR
+//    | MINUTE
+//    | SECOND
+//    | TIMEZONE_HOUR
+//    | TIMEZONE_MINUTE
+//    | TIMEZONE_REGION
+//    | TIMEZONE_ABBR
+//    | TIMESTAMP
+//    | TIMESTAMP_UNCONSTRAINED
+//    | TIMESTAMP_TZ_UNCONSTRAINED
+//    | TIMESTAMP_LTZ_UNCONSTRAINED
+//    | YMINTERVAL_UNCONSTRAINED
+//    | DSINTERVAL_UNCONSTRAINED
+//    | BFILE
+//    | BLOB
+//    | CLOB
+//    | NCLOB
+//    | MLSLABEL
+//    ;
+  = ('NVARCHAR2' / 'DEC' / 'INTEGER' / 'INT' / 'NUMERIC' / 'SMALLINT' / 'NUMBER' / 'DECIMAL' / 'FLOAT' / 'REAL' / 'NCHAR' / 'CHAR' / 'CHARACTER' / 'VARCHAR2' / 'VARCHAR' / 'STRING' / 'RAW') ALT_SPACE?
+
+
+//////////////////////////////////////////////////////////////////////////////////
+
 
 //eof

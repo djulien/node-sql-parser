@@ -33,69 +33,68 @@ sql_script
     : ((unit_statement | sql_plus_command) SEMICOLON?)* EOF
     ;
 
-//commented out unneeded stuff -DJ
-unit_statement : "DUMMY"
-//    : transaction_control_statements
-//    | alter_cluster
-//    | alter_database
-//    | alter_function
-//    | alter_package
-//    | alter_procedure
-//    | alter_sequence
-//    | alter_session
-//    | alter_trigger
-//    | alter_type
-//    | alter_table
-//    | alter_tablespace
-//    | alter_index
-//    | alter_library
-//    | alter_materialized_view
-//    | alter_materialized_view_log
-//    | alter_user
-//    | alter_view
+unit_statement
+    : transaction_control_statements
+    | alter_cluster
+    | alter_database
+    | alter_function
+    | alter_package
+    | alter_procedure
+    | alter_sequence
+    | alter_session
+    | alter_trigger
+    | alter_type
+    | alter_table
+    | alter_tablespace
+    | alter_index
+    | alter_library
+    | alter_materialized_view
+    | alter_materialized_view_log
+    | alter_user
+    | alter_view
 
-//    | analyze
-//    | associate_statistics
-//    | audit_traditional
-//    | unified_auditing
+    | analyze
+    | associate_statistics
+    | audit_traditional
+    | unified_auditing
 
     | create_function_body
     | create_procedure_body
-//    | create_package
-//    | create_package_body
+    | create_package
+    | create_package_body
 
-//    | create_index
-//    | create_table
-//    | create_tablespace
-//    | create_cluster
-//    | create_context
-//    | create_view //TODO
-//    | create_directory
-//    | create_materialized_view
-//    | create_materialized_view_log
-//    | create_user
+    | create_index
+    | create_table
+    | create_tablespace
+    | create_cluster
+    | create_context
+    | create_view //TODO
+    | create_directory
+    | create_materialized_view
+    | create_materialized_view_log
+    | create_user
 
-//    | create_sequence
-//    | create_trigger
-//    | create_type
-//    | create_synonym
+    | create_sequence
+    | create_trigger
+    | create_type
+    | create_synonym
 
-//    | drop_function
-//    | drop_package
-//    | drop_procedure
-//    | drop_sequence
-//    | drop_trigger
-//    | drop_type
-//    | data_manipulation_language_statements
-//    | drop_table
-//    | drop_index
+    | drop_function
+    | drop_package
+    | drop_procedure
+    | drop_sequence
+    | drop_trigger
+    | drop_type
+    | data_manipulation_language_statements
+    | drop_table
+    | drop_index
 
-//    | comment_on_column
-//    | comment_on_table
+    | comment_on_column
+    | comment_on_table
 
     | anonymous_block
 
-//    | grant_statement
+    | grant_statement
 
     | procedure_call
     ;
@@ -2460,11 +2459,10 @@ filename
     : CHAR_STRING
     ;
 
-//missing first item? -DJ
 alter_table
     : ALTER TABLE tableview_name
       ( 
-      /*|*/ alter_table_properties
+      | alter_table_properties
       | constraint_clauses
       | column_clauses
 //TODO      | alter_table_partitioning
@@ -3331,11 +3329,10 @@ table_ref_aux
     : table_ref_aux_internal flashback_query_clause* (/*{isTableAlias()}?*/ table_alias)?
     ;
 
-//non-standard comments? -DJ
 table_ref_aux_internal
-    : dml_table_expression_clause (pivot_clause | unpivot_clause)?                //# table_ref_aux_internal_one
-    | '(' table_ref subquery_operation_part* ')' (pivot_clause | unpivot_clause)?  //# table_ref_aux_internal_two
-    | ONLY '(' dml_table_expression_clause ')'                                     //# table_ref_aux_internal_three
+    : dml_table_expression_clause (pivot_clause | unpivot_clause)?                # table_ref_aux_internal_one
+    | '(' table_ref subquery_operation_part* ')' (pivot_clause | unpivot_clause)?  # table_ref_aux_internal_two
+    | ONLY '(' dml_table_expression_clause ')'                                     # table_ref_aux_internal_three
     ;
 
 join_clause
@@ -3705,25 +3702,22 @@ cursor_expression
     : CURSOR '(' subquery ')'
     ;
 
-//avoid recursion -DJ
 logical_expression
     : multiset_expression (IS NOT?
         (NULL_ | NAN | PRESENT | INFINITE | A_LETTER SET | EMPTY | OF TYPE?
         '(' ONLY? type_spec (',' type_spec)* ')'))*
     | NOT logical_expression
-    | /*logical_expression*/ multiset_expression AND logical_expression
-    | /*logical_expression*/ multiset_expression OR logical_expression
+    | logical_expression AND logical_expression
+    | logical_expression OR logical_expression
     ;
 
 multiset_expression
     : relational_expression (multiset_type=(MEMBER | SUBMULTISET) OF? concatenation)?
     ;
 
-//avoid recursion -DJ
 relational_expression
-//    : relational_expression relational_operator relational_expression
-//    | compound_expression
-    : compound_expression (relational_operator relational_expression)* //avoid recursion
+    : relational_expression relational_operator relational_expression
+    | compound_expression
     ;
 
 compound_expression
@@ -3751,13 +3745,12 @@ between_elements
     : concatenation AND concatenation
     ;
 
-//avoid recursion -DJ
 concatenation
     : model_expression
         (AT (LOCAL | TIME ZONE concatenation) | interval_expression)?
-    | /*concatenation*/ model_expression op=(ASTERISK | SOLIDUS) concatenation
-    | /*concatenation*/ model_expression op=(PLUS_SIGN | MINUS_SIGN) concatenation
-    | /*concatenation*/ model_expression BAR BAR concatenation
+    | concatenation op=(ASTERISK | SOLIDUS) concatenation
+    | concatenation op=(PLUS_SIGN | MINUS_SIGN) concatenation
+    | concatenation BAR BAR concatenation
     ;
 
 interval_expression

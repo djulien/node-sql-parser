@@ -34,7 +34,7 @@ sql_script
     ;
 
 //commented out unneeded stuff -DJ
-unit_statement : "DUMMY"
+unit_statement
 //    : transaction_control_statements
 //    | alter_cluster
 //    | alter_database
@@ -59,7 +59,7 @@ unit_statement : "DUMMY"
 //    | audit_traditional
 //    | unified_auditing
 
-    | create_function_body
+    : create_function_body
     | create_procedure_body
 //    | create_package
 //    | create_package_body

@@ -83,9 +83,13 @@ debugger;
 //first rule = start rule; redirect to real start:
 //allow bare stmts as well
 //start = WHITE_SPACE? (sql_script / seq_of_statements) EOF
-start = WHITE_SPACE? sql_script
+start = WHITE_SPACE sql_script
 
+//end of string token:
+TOKEND = ![A-Za-z0-9$@_] WHITE_SPACE
 
-WHITE_SPACE = (NEWLINE / ' ')*
+//optional white space:
+//TODO: required white space?
+WHITE_SPACE = [ \t\r\n]* //(NEWLINE / ' ')*
 
 //eof

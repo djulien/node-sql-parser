@@ -2246,7 +2246,8 @@ TO_DATE:                      'TO_DATE';
 //  Lowercase 'n' is a usual addition to the standard
 
 //avoid "infinite loop" error in peg: -DJ
-NATIONAL_CHAR_STRING_LIT: 'N' CHAR_STRING; //'\'' (~('\'' | '\r' | '\n' ) | '\'' '\'' | NEWLINE)* '\'';
+//kludge: avoid strings to prevent white space -DJ
+NATIONAL_CHAR_STRING_LIT: [N] CHAR_STRING; //'\'' (~('\'' | '\r' | '\n' ) | '\'' '\'' | NEWLINE)* '\'';
 
 //  Rule #040 <BIT_STRING_LIT> - subtoken typecast in <REGULAR_ID>
 //  Lowercase 'b' is a usual addition to the standard
@@ -2277,13 +2278,15 @@ PERIOD:         '.';
     ;*/
 
 UNSIGNED_INTEGER:    [0-9]+;
-APPROXIMATE_NUM_LIT: FLOAT_FRAGMENT ('E' ('+'|'-')? (FLOAT_FRAGMENT | [0-9]+))? ('D' | 'F')?;
+//kludge: avoid strings to prevent white space -DJ
+//APPROXIMATE_NUM_LIT: FLOAT_FRAGMENT ('E' ('+'|'-')? (FLOAT_FRAGMENT | [0-9]+))? ('D' | 'F')?;
+APPROXIMATE_NUM_LIT: FLOAT_FRAGMENT ([E] [-+]? (FLOAT_FRAGMENT | [0-9]+))? [DF]? TOKEND;
 
 // Rule #--- <CHAR_STRING> is a base for Rule #065 <char_string_lit> , it incorporates <character_representation>
 // and a superfluous subtoken typecasting of the "QUOTE"
 //avoid "infinite loop" error in peg: -DJ
 //CHAR_STRING: '\''  (~('\'' | '\r' | '\n') | '\'' '\'' | NEWLINE)* '\'';
-CHAR_STRING: "'"  ( [^'\r\n]  |  "''"  |  NEWLINE)* "'";
+CHAR_STRING: "'"  ( [^'\r\n]  |  "''"  |  NEWLINE)* "'" WHITE_SPACE;
 
 
 // Perl-style quoted string, see Oracle SQL reference, chapter String Literals
@@ -2296,8 +2299,9 @@ fragment QS_PAREN   : QUOTE '(' .*? ')' QUOTE ;
 fragment QS_OTHER_CH: ~('<' | '{' | '[' | '(' | ' ' | '\t' | '\n' | '\r');
 
 //avoid "infinite loop" error in peg: -DJ
+//kludge: avoid strings to prevent white space -DJ
 //DELIMITED_ID: '"' (~('"' | '\r' | '\n') | '"' '"')+ '"' ;
-DELIMITED_ID: '"'  ( [^"\r\n]  |  '""')+ '"';
+DELIMITED_ID: ["]  ( [^"\r\n]  |  ["]["])+ '"';
 
 PERCENT:                   '%';
 AMPERSAND:                 '&';
@@ -2312,10 +2316,12 @@ SOLIDUS:                   '/';
 AT_SIGN:                   '@';
 ASSIGN_OP:                 ':=';
 
+//kludge: avoid strings to prevent white space -DJ
 BINDVAR
-    : ':' SIMPLE_LETTER  (SIMPLE_LETTER | [0-9] | '_')*
-    | ':' DELIMITED_ID  // not used in SQL but spotted in v$sqltext when using cursor_sharing
-    | ':' UNSIGNED_INTEGER
+//    : ':' SIMPLE_LETTER  (SIMPLE_LETTER | [0-9] | '_')*
+    : [:] SIMPLE_LETTER  (SIMPLE_LETTER | [0-9_])* TOKEND
+    | [:] DELIMITED_ID  // not used in SQL but spotted in v$sqltext when using cursor_sharing
+    | [:] UNSIGNED_INTEGER
     | QUESTION_MARK // not in SQL, not in Oracle, not in OCI, use this for JDBC
     ;
 
@@ -2338,7 +2344,9 @@ EQUALS_OP: '=';
 LEFT_BRACKET:  '[';
 RIGHT_BRACKET: ']';
 
-INTRODUCER: '_';
+//kludge: avoid strings to prevent white space -DJ
+//INTRODUCER: '_';
+INTRODUCER: [_];
 
 // Comments https://docs.oracle.com/cd/E11882_01/server.112/e41084/sql_elements006.htm
 
@@ -2348,17 +2356,23 @@ MULTI_LINE_COMMENT:  '/*' .*? '*/'                                    -> channel
 REMARK_COMMENT:      'REM' {IsNewlineAtPos(-4)}? 'ARK'? (' ' ~('\r' | '\n')*)? NEWLINE_EOF -> channel(HIDDEN);
 
 // https://docs.oracle.com/cd/E11882_01/server.112/e16604/ch_twelve032.htm#SQPUG052
-PROMPT_MESSAGE:      'PRO' {IsNewlineAtPos(-4)}? 'MPT'? (' ' ~('\r' | '\n')*)? NEWLINE_EOF;
+//kludge: avoid strings to prevent white space -DJ
+//PROMPT_MESSAGE:      'PRO' {IsNewlineAtPos(-4)}? 'MPT'? (' ' ~('\r' | '\n')*)? NEWLINE_EOF;
+PROMPT_MESSAGE:      [P][R][O] {IsNewlineAtPos(-4)}? ([M][P][T])? ([ ] [^\r\n]*)? NEWLINE_EOF;
 
 // TODO: should starts with newline
 START_CMD
     //: 'STA' 'RT'? SPACE ~('\r' | '\n')* NEWLINE_EOF
     // https://docs.oracle.com/cd/B19306_01/server.102/b14357/ch12002.htm
     // https://docs.oracle.com/cd/B19306_01/server.102/b14357/ch12003.htm
-    : '@' {IsNewlineAtPos(-2)}? '@'? ~('\r' | '\n')* NEWLINE_EOF
+//kludge: avoid strings to prevent white space -DJ
+//    : '@' {IsNewlineAtPos(-2)}? '@'? ~('\r' | '\n')* NEWLINE_EOF
+    : [@] {IsNewlineAtPos(-2)}? [@]? [^\r\n]* NEWLINE_EOF
     ;
 
-REGULAR_ID: SIMPLE_LETTER (SIMPLE_LETTER | '$' | '_' | '#' | [0-9])*;
+//kludge: avoid strings to prevent white space -DJ
+//REGULAR_ID: SIMPLE_LETTER (SIMPLE_LETTER | '$' | '_' | '#' | [0-9])*;
+REGULAR_ID: SIMPLE_LETTER (SIMPLE_LETTER | [$_#0-9])* TOKEND;
 
 SPACES: [ \t\r\n]+ -> channel(HIDDEN);
 
@@ -2366,7 +2380,9 @@ SPACES: [ \t\r\n]+ -> channel(HIDDEN);
 
 fragment NEWLINE_EOF    : NEWLINE | EOF;
 fragment QUESTION_MARK  : '?';
-fragment SIMPLE_LETTER  : [A-Z];
-fragment FLOAT_FRAGMENT : UNSIGNED_INTEGER* '.'? UNSIGNED_INTEGER+;
-fragment NEWLINE        : '\r'? '\n';
+fragment SIMPLE_LETTER  : [A-Za-z]; //allow lower case -DJ
+fragment FLOAT_FRAGMENT : UNSIGNED_INTEGER* [.]? UNSIGNED_INTEGER+ ![0-9]; //is !dig look-ahead needed? -DJ
+//kludge: avoid strings to prevent white space -DJ
+//fragment NEWLINE        : '\r'? '\n';
+fragment NEWLINE        : [\r]? [\n];
 fragment SPACE          : [ \t];

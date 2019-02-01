@@ -34,16 +34,18 @@ if (!NEW)
     src = src.replace_log(/(channel\(HIDDEN\))/gi, "'$1'"); //string-out "channel()"
 }
 
+//const NO_WHSP = "APPROXIMATE_NUM_LIT,CHAR_STRING,DELIMITED_ID,NATIONAL_CHAR_STRING_LIT,NEWLINE,PROMPT_MESSAGE,REGULAR_ID,START_CMD"; '_'i  '.'
+
 //src = src.replace_log(/^(\s*\r?\n\s+[;|])/gm, "//$1"); //remove blank lines within rules
 //src = src.replace_log(/:\s+/gm, (match) => match.replace(/:/, " ="));
 //src = src.replace_log(/=/g, ":");
 src = src.replace_log(/\('\+'\|'-'\)/gm, "( '+' | '-' )");
-src = src.replace_log(/([:=])/g, (match) => (match == ":")? "=": ":");
+src = src.replace_log(/'[:=]'|\[[:=]\]|(:)|(=)/g, (match, colon, equal) => colon? "=": equal? ":": match);
 src = src.replace_log(/([^'])\|/gm, "$1 / "); //(match) => match.replace(/\|/, "/"));
 src = src.replace_log(/([^'])~/gm, "$1 !");
 src = src.replace_log(/(;\s*)$/gm, " //$1");
 src = src.replace_log(/(.)\{/g, (match) => (match[0] != "'")? `${match[0]} &{`: match);
-src = src.replace_log(/('[^']+')/gm, "$1i"); //make keywords case insensitive
+src = src.replace_log(/('[^'\n]*?[a-z0-9@$_]')|('[^'\n]*?')|"[^"\n]*?"|\[[^\]\n]*?\]/gmi, (match, single_alpha, single_other) => single_alpha? `${single_alpha}i TOKEND`: single_other? `${single_other}i WHITE_SPACE`: match); //make keywords case insensitive, also allow trailing whitespace (only for single-quoted strings)
 
 //TODO: not sure what to do with these:
 if (!NEW) src = src.replace_log(/(\.\*\?)/g, "'$1'");

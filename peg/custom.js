@@ -185,11 +185,9 @@ WHITE_SPACE: [ \t\r\n]* ; //(NEWLINE / ' ')*
 //eof
 
 
+//TODO?:
+//eat white space with all tokens
 //upon see proc/func, push new func, append verbs to func
 //  upon see C/R/U/D, push new verb, append tbl, col, func refs to verb
 //  upon valid stmt end, emit verb with tbl/col/func refs
 //upon valid proc end, emit func with verb refs
-
-//Fri: SYF: 1, misc: 1.5, T: 7.5
-//Sat: T: 4
-//Sun: 115-

@@ -158,13 +158,19 @@ require("colors").enabled = true; //for console output; https://github.com/Marak
 //make it easier to see where error is: -DJ
   function highlight(str, ofs, len)
   {
-    return `${str.slice(ofs - len, ofs - 1).blue}${str.slice(ofs -1, ofs + 1).red}${str.slice(ofs + 1, ofs + len).blue}`.replace(/\n/g, "\\n"); //-DJx
+    return `${str.slice(Math.max(ofs - len, 0), Math.max(ofs - 4, 0)).blue}${str.slice(Math.max(ofs - 4, 0), ofs).yellow}${str.slice(ofs, ofs + 4).red}${str.slice(ofs + 4, ofs + len).blue}`.replace(/\n/g, "\\n"); //-DJx
   }
 }
 
+
+/////////////////////////////////////////////////////////////////////////////////
+
+//use new top-level rules: -DJ
+start = "DJTEST" sql_script / old_start
+
 //added "debugger" for easier debug -DJ
 //allow trailing white space and ";" -DJ
-start 
+old_start 
 //  = __ "ALT" __ alt:ALT_grammar { return alt; } //experimental; use prefix keywd to avoid impact to existing unit tests -DJ
   = &{ params = []; DEBUG(1); return true; } __ ast:(union_stmt  / update_stmt / replace_insert_stmt ) __ SEMI? __ {
 //TODO: maybe params should not be cleared here? (proc_stmts can be recursive) -DJ
@@ -173,11 +179,11 @@ start
         param : params
       } 
     } 
-  / ast:proc_stmts __ SEMI? __ {
-      return {
-        ast : ast  
-      }
-    }
+//  / ast:proc_stmts __ SEMI? __ {
+//      return {
+//        ast : ast  
+//      }
+//    }
 
 union_stmt
   = head:select_stmt tail:(__ KW_UNION __ select_stmt)* {
@@ -1074,15 +1080,6 @@ KW_MIN       = "MIN"i      !ident_start    { return 'MIN';      }
 KW_SUM       = "SUM"i      !ident_start    { return 'SUM';      }
 KW_AVG       = "AVG"i      !ident_start    { return 'AVG';      }
 
-//func/proc keywords -DJ
-KW_PROC      = "PROCEDURE"i //!ident_start   { return 'PROCEDURE'; }
-KW_FUNC      = "FUNCTION"i //!ident_start    { return 'FUNCTION'; }
-KW_BEGIN     = "BEGIN"i    //!ident_start    { return 'BEGIN';    }
-KW_END       = "END"i      //!ident_start    { return 'END';      }
-KW_OUT       = "OUT"i
-KW_INOUT     = "INOUT"i
-KW_PRAGMA    = "PRAGMA"i  //exception_init(cd_notfound,-1115);
-
 //special characters
 DOT       = '.'
 COMMA     = ','
@@ -1092,8 +1089,6 @@ RPAREN    = ')'
 
 LBRAKE    = '['
 RBRAKE    = ']'
-
-SEMI      = ';' //need terminator for multiple proc_stmt -DJ
 
 __ =
   whitespace*
@@ -1109,18 +1104,362 @@ EOL
   
 EOF = !.
 
+
+
+
+/////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////
+//added missing stmt types, better BEGIN/END and block handling: -DJ
+
+SEMI      = ';' __ //need terminator for multiple proc stmts
+
+//reworked top levels: -DJ
+//eat leading white space for simpler token parsing:
+sql_script = __ seq_of_statements
+//  = __ ((unit_statement / sql_plus_command) SEMI?)* EOF
+//  = __ s:seq_of_statements EOF { return s; }
+  //;
+
+seq_of_statements
+  = (statement (SEMI / EOF) / label_declaration)+
+  //;
+
+label_declaration
+  = '<<' __ label_name '>>' __
+  //;
+
+statement
+  = body
+  / block
+  / assignment_statement
+//  / continue_statement
+//  / exit_statement
+//  / goto_statement
+  / if_statement
+//  / loop_statement
+//  / forall_statement
+//  / null_statement
+//  / raise_statement
+  / return_statement
+  / case_statement
+  / sql_statement
+  / function_call
+//  / pipe_row_statement
+  / procedure_call
+  //;
+
+//seq_of_statements
+sql_statement
+//  = select_statement
+//  / update_statement
+//  / delete_statement
+//  / insert_statement
+//  / lock_table_statement
+//  / merge_statement
+//  / explain_statement
+//  = __ ((unit_statement / sql_plus_command) SEMI?)*
+  = unit_statement
+  / data_manipulation_language_statements
+  //;
+
+unit_statement
+  = create_function_body
+  / create_procedure_body
+  / anonymous_block
+//  / procedure_call
+  //;
+
+//sql_plus_command
+//  = '/'i __
+//  / EXIT
+//  / PROMPT_MESSAGE
+//  / SHOW (ERR / ERRORS)
+//  / START_CMD
+//  = sql_statement 
+  //;
+
+//sql_statement
+//  = execute_immediate
+//  = data_manipulation_language_statements
+//  / cursor_manipulation_statements
+  //;
+
+data_manipulation_language_statements
+  = select_statement
+  / update_statement
+  / delete_statement
+  / insert_statement
+  //;
+
+/*
+cursor_manipulation_statements
+  = close_statement
+  / open_statement
+  / fetch_statement
+  / open_for_statement
+  //;
+*/
+
+
+/////////////////////////////////////////////////////////////////////////////////
+//main stmt types:
+//all should eat trailing white space
+// create_function_body
+// create_procedure_body
+// anonymous_block
+// procedure_call
+// select_statement
+// update_statement
+// delete_statement
+// insert_statement
+
+//more keywords: -DJ
+//eat trailing white space to reduce parent rule clutter
+KKW_CREATE    = "CREATE"i   !ident_start __
+KKW_OR    = "OR"i   !ident_start __
+KKW_REPLACE    = "REPLACE"i   !ident_start __
+KKW_DELETE    = "DELETE"i   !ident_start __
+KKW_FROM    = "FROM"i   !ident_start __
+KKW_RETURN    = "RETURN"i   !ident_start __
+KKW_RETURNING    = "RETURNING"i   !ident_start __
+KKW_IS    = "IS"i   !ident_start __
+KKW_AS    = "AS"i   !ident_start __
+KKW_EXCEPTION    = "EXCEPTION"i   !ident_start __
+KKW_CALL    = "CALL"i   !ident_start __
+
+
+block
+  = KKW_DECLARE? declare_spec+ body
+  //;
+
+assignment_statement = proc_var __
+//  = (general_element / bind_variable) ASSIGN_OP expression
+  //;
+//general_element
+//  = general_element_part ('.'i WHITE_SPACE general_element_part)*
+  //;
+//bind_variable
+//  = (BINDVAR / ':'i WHITE_SPACE UNSIGNED_INTEGER)
+//    (INDICATOR? (BINDVAR / ':'i WHITE_SPACE UNSIGNED_INTEGER))?
+//    ('.'i WHITE_SPACE general_element_part)*
+  //;
+
+return_statement = KKW_RETURN expr __
+
+
+create_function_body
+  = KKW_CREATE (KKW_OR KKW_REPLACE)? b:function_body //{ return {type: func_body, body: b}; }
+  //;
+
+create_procedure_body
+  = KKW_CREATE (KKW_OR KKW_REPLACE)? procedure_body //{ return {type: func_body, body: b}; }
+//  PROCEDURE procedure_name ('('i WHITE_SPACE parameter (','i WHITE_SPACE parameter)* ')'i WHITE_SPACE)?
+//    invoker_rights_clause? (IS / AS)
+//    (DECLARE? seq_of_declare_specs? body / call_spec / EXTERNAL) ';'i WHITE_SPACE
+  //;
+
+anonymous_block
+  = (KKW_DECLARE seq_of_declare_specs)? KKW_BEGIN seq_of_statements (KKW_EXCEPTION exception_handler+)? KKW_END SEMI
+
+procedure_call
+  = routine_name function_argument?
+  //;
+
+function_call
+  = KKW_CALL? routine_name function_argument?
+  //;
+
+//shims to old stuff up above:
+select_statement = st:union_stmt __ { return st; }
+update_statement = st:update_stmt __{ return st; }
+insert_statement = st:replace_insert_stmt __{ return st; }
+routine_name = id:ident __ { return id; } //?? name:ident m:mem_chain
+function_argument = a:arg_def __ { return a; }
+general_table_ref = t:table_ref __ { return t; }
+identifier = i:ident __ { return i; }
+type_spec = d:data_type __ { return d; }
+variable_declaration = proc_vars __
+label_name = id:ident __ { return id; }
+exception_name = identifier // m:mem_chain ('.'i WHITE_SPACE id_expression)*
+condition = e:proc_expr __ { return e; }
+expression = e:expr __ { return e; }
+ into_clause
+  =  db:db_name    __  DOT   __
+    t:table_name  __ LPAREN __
+    c:column_list __ RPAREN __
+  //;
+expressions = column_list
+
+
+delete_statement
+  = KKW_DELETE &{ return verb("delete"); } KKW_FROM? general_table_ref where_clause? static_returning_clause? error_logging_clause?
+  //;
+
+seq_of_declare_specs
+  = declare_spec+
+  //;
+
+static_returning_clause
+  = (KKW_RETURNING / KKW_RETURN) expressions into_clause
+  //;
+
+error_logging_clause
+//  = KKW_LOG KKW_ERRORS error_logging_into_part? expression? error_logging_reject_part?
+  = "TODO"
+  //;
+//error_logging_into_part
+//  = KKW_INTO tableview_name
+  //;
+//error_logging_reject_part
+//  = KKW_REJECT KKW_LIMIT (KKW_UNLIMITED / expression)
+  //;
+
+
+////////////////////////////////////////////////////////////////////////////////
+//main (added) functional blocks:
+//  function_body
+//  procedure_body
+//  declare_spec
+//  exception_handler
+//  routine_name
+//  function_argument
+
+
+function_body
+  = KKW_FUNCTION identifier arg_list? //(LPAREN __ (COMMA? __ parameter)+ __ RPAREN)?
+    KKW_RETURN type_spec /*(invoker_rights_clause | parallel_enable_clause | result_cache_clause | DETERMINISTIC)* */
+    ((/*PIPELINED?*/ (KKW_IS / KKW_AS) (KKW_DECLARE? seq_of_declare_specs? body /*| call_spec*/))) SEMI // | (PIPELINED | AGGREGATE) USING implementation_type_name) SEMI
+  //;
+
+procedure_body
+  = KKW_PROCEDURE identifier arg_list? /*(LPAREN __ (COMMA? __ parameter)+ __ RPAREN)?*/ (KKW_IS / KKW_AS)
+    (KKW_DECLARE? seq_of_declare_specs? body) SEMI // | call_spec | EXTERNAL) SEMI
+  //;
+
+exception_declaration
+  = identifier KKW_EXCEPTION SEMI
+  //;
+
+declare_spec
+  = pragma_declaration
+  / variable_declaration
+//  / subtype_declaration
+//  / cursor_declaration
+  / exception_declaration
+//  / type_declaration
+  / procedure_spec
+  / function_spec
+  / procedure_body
+  / function_body
+  //;
+
+
+/////////////////////////////////////////////////////////////////////////////////
+//main stmt types:
+//  pragma_declaration
+//  variable_declaration
+//  exception_declaration
+//  procedure_spec
+//  function_spec
+//  procedure_body
+//  function_body
+
+
+procedure_spec
+  = KKW_PROCEDURE identifier arg_list SEMI // ('(' parameter ( ',' parameter )* ')')? ';'
+  //;
+
+function_spec
+  = KKW_FUNCTION identifier arg_list // ('(' parameter ( ',' parameter)* ')')?
+    KKW_RETURN type_spec SEMI // (DETERMINISTIC)? (RESULT_CACHE)? ';'
+  //;
+
+pragma_declaration
+  = KKW_PRAGMA "TODO?" __ // (SERIALLY_REUSABLE
+//    / AUTONOMOUS_TRANSACTION
+//    / EXCEPTION_INIT '('i WHITE_SPACE exception_name ','i WHITE_SPACE numeric_negative ')'i WHITE_SPACE
+//    / INLINE '('i WHITE_SPACE id1:identifier ','i WHITE_SPACE expression ')'i WHITE_SPACE
+//    / RESTRICT_REFERENCES '('i WHITE_SPACE (identifier / DEFAULT) (','i WHITE_SPACE identifier)+ ')'i WHITE_SPACE) ';'i WHITE_SPACE
+  //;
+
+//more keywords: -DJ
+//NOTE: only needs to return a value if token is stored
+//include trailing white space to reduce clutter in parent rules (denoted with extra leading "K" - still searchable with "KW")
+KKW_PROCEDURE      = "PROCEDURE"i !ident_start __  { return 'PROCEDURE'; }
+KKW_FUNCTION      = "FUNCTION"i !ident_start __   { return 'FUNCTION'; }
+KKW_BEGIN     = "BEGIN"i    !ident_start __   //{ return 'BEGIN';    }
+KKW_END       = "END"i      !ident_start __   //{ return 'END';      }
+KKW_IN       = "IN"i      !ident_start __   { return 'IN';      }
+KKW_OUT       = "OUT"i      !ident_start __   { return 'OUT';      }
+KKW_INOUT     = "INOUT"i    !ident_start __   { return 'INOUT';      }
+//KKW_PRAGMA    = "PRAGMA"i   !ident_start __   { return 'PRAGMA';      } //exception_init(cd_notfound,-1115);
+KKW_PRAGMA    = "PRAGMA"i   !ident_start __
+KKW_DECLARE    = "DECLARE"i   !ident_start __   { return 'DECLARE'; }
+//KKW_EXCEPTION  = "EXCEPTION"i   !ident_start __   { return 'EXCEPTION'; }
+KKW_WHEN    = "WHEN"i   !ident_start __
+KKW_CASE    = "CASE"i   !ident_start __
+
+
+body
+  = KKW_BEGIN seq_of_statements (KKW_EXCEPTION exception_handler+)? KKW_END label_name?
+
+exception_handler
+  = KKW_WHEN exception_name (KKW_OR exception_name)* KKW_THEN seq_of_statements
+
+if_statement
+  = KKW_IF condition KKW_THEN seq_of_statements/*+*/ elsif_part* else_part? KKW_END KKW_IF
+
+elsif_part
+  = KKW_ELSIF condition KKW_THEN seq_of_statements/*+*/
+
+else_part
+  = KKW_ELSE seq_of_statements/*+*/
+
+
+case_statement
+  = searched_case_statement
+  / simple_case_statement
+  //;
+
+searched_case_statement
+  = label_name? ck1:KKW_CASE searched_case_when_part+ case_else_part? KKW_END KKW_CASE? label_name?
+  //;
+
+simple_case_statement
+  = label_name? ck1:KKW_CASE expression simple_case_when_part+  case_else_part? KKW_END KKW_CASE? label_name?
+  //;
+
+simple_case_when_part
+  = KKW_WHEN expression KKW_THEN ( seq_of_statements / expression)
+  //;
+searched_case_when_part = simple_case_when_part
+//    = WHEN expression THEN ( seq_of_statements / expression)
+//     //;
+
+case_else_part
+  = KKW_ELSE ( seq_of_statements / expression)
+  //;
+
+
+/////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////
 //begin procedure extension
+
 //put func/proc stmt at same level as other, allow repeat -DJ
-proc_stmts 
+proc_stmt = EOF
+X_proc_stmts 
   = head:proc_stmt tail:(__ SEMI __ proc_stmt)* __ SEMI? {
     return createList(head, tail);
   }
 
+KW_PROC = "proc"
+KW_FUNC = "func"
+
 //added proc/func keywds, ret type -DJ
 //procs don't have arg lists, but allow it here so parse rule can be shared -DJ
 //kludge: allow "()" on BEGIN and END to simplify proc call parsing -DJ
-proc_def
-  = __ t:(KW_PROC / KW_FUNC) __ name:ident m:mem_chain __ l:arg_list? __ r:(KW_RETURN __ data_type)? __ KW_IS __ v:proc_vars? __ KW_BEGIN /*(__ LPAREN __ RPAREN)?*/ __ s:start* __ KW_END  /*( __ LPAREN __ RPAREN)?*/ {
+X_proc_def
+  = __ t:(KW_PROC / KW_FUNC) __ name:ident m:mem_chain __ l:arg_list? __ r:(KW_RETURN __ data_type)? __ KW_IS __ v:proc_vars? __ KKW_BEGIN /*(__ LPAREN __ RPAREN)?*/ __ s:start* __ KKW_END  /*( __ LPAREN __ RPAREN)?*/ {
     //based on proc_func_call example below
     varList.push(name); //push for analysis
     return {
@@ -1140,14 +1479,14 @@ proc_def
   }
 
 arg_list 
-  = LPAREN __ head:arg_def tail:(__ COMMA __ arg_def)* __ RPAREN {
+  = LPAREN __ head:arg_def tail:(__ COMMA __ arg_def)* __ RPAREN __ {
     return createList(head, tail);
 //NO  / proc_stmt* //creates "infinite loop" error
   } 
 
 //added param direction -DJ
 arg_def
-  = name:ident_name __ dir:(KW_IN / KW_OUT / KW_INOUT)? __ type:data_type {
+  = name:ident_name __ dir:(KKW_IN / KKW_OUT / KKW_INOUT)? type:data_type {
     return {
       type: 'arg_def',
       name: name,
@@ -1161,7 +1500,7 @@ arg_def
 //just check syntax (allow any data type/len)
 //see examples at https://forcedotcom.github.io/phoenix/index.html#data_type
 data_type
-  = name:ident_name size:(__ LPAREN __ int __ RPAREN)? {
+  = name:ident_name size:(__ LPAREN __ int __ RPAREN)? __ {
       return {
         type  : 'data_type',
         typename : name,
@@ -1177,7 +1516,7 @@ proc_vars
 
 //ignore "pragma" stmts -DJ
 proc_var
-  = v:(ident / var_decl / param) __ dt:data_type __ e:(KW_ASSIGN __ proc_expr)? {
+  = v:(ident / var_decl / param) __ dt:data_type __ e:(KW_ASSIGN __ proc_expr)? __ {
     //push for analysis
     varList.push(v);
     return {
@@ -1188,11 +1527,13 @@ proc_var
       init: (e || [])[2],
     }
   }
-  / KW_PRAGMA __ func_call
+  / KKW_PRAGMA func_call
 
 //allow proc call, other proc stmts -DJ
 //BROKEN-ignore extraneous BEGIN/END (can be nested) -DJ
-proc_stmt 
+/*
+proc_def = EOF
+X_proc_stmt 
   = &{ varList = []; return true; } __ s:(assign_stmt / return_stmt / proc_func_call / proc_if / proc_def) {
 //TODO: maybe varList should not be cleared here? (proc_stmts can be recursive) -DJ
       return {
@@ -1200,19 +1541,21 @@ proc_stmt
         vars: varList
       }
     }
+*/
 /*
     / (KW_BEGIN (__ SEMI?) __)?
     / (KW_END (__ SEMI?) __)?
 */
 
- KW_IF = 'if'i
- KW_THEN = 'then'i
- KW_ELSIF = 'elsif'i
- KW_ELSE = 'else'i
- KW_ENDIF = KW_END __ KW_IF
+ KKW_IF = 'if'i !ident __
+ KKW_THEN = 'then'i !ident __
+ KKW_ELSIF = 'elsif'i !ident __
+ KKW_ELSE = 'else'i !ident __
+ //KKW_ENDIF = KW_END __ KW_IF
 
+/*
 proc_if
-  = /*&{ return DEBUG(2); }*/ KW_IF __ e:proc_expr __ KW_THEN __ t:proc_stmts __ SEMI? __ f:else_stmt? __ KW_ENDIF {
+  = /-*&{ return DEBUG(2); }*-/ KW_IF __ e:proc_expr __ KW_THEN __ t:proc_stmts __ SEMI? __ f:else_stmt? __ KW_ENDIF {
       return {
         stmt: "if",
         expr: e,
@@ -1234,6 +1577,7 @@ else_stmt
   / KW_ELSE __ s:proc_stmts __ SEMI? {
       return s;
     }
+*/
 
 //allow param -DJ
 assign_stmt 
@@ -1274,7 +1618,7 @@ proc_multiplicative_expr
     }
 
 proc_join
-  = lt:var_decl __ op:join_op  __ rt:var_decl __ expr:on_clause {
+  = lt:var_decl __ op:join_op  __ rt:var_decl __ expr:on_clause __ {
       return {
         type    : 'join',
         ltable  : lt, 

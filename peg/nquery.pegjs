@@ -158,15 +158,15 @@ require("colors").enabled = true; //for console output; https://github.com/Marak
 //make it easier to see where error is: -DJ
   function highlight(str, ofs, len)
   {
-    return `${str.slice(ofs - len, ofs - 1).blue}${str.slice(ofs -1, ofs + 1).cyan}${str.slice(ofs + 1, ofs + len).blue}`.replace(/\n/g, "\\n"); //-DJx
+    return `${str.slice(ofs - len, ofs - 1).blue}${str.slice(ofs -1, ofs + 1).red}${str.slice(ofs + 1, ofs + len).blue}`.replace(/\n/g, "\\n"); //-DJx
   }
 }
 
 //added "debugger" for easier debug -DJ
 //allow trailing white space and ";" -DJ
 start 
-  = __ "ALT" __ alt:ALT_grammar { return alt; } //experimental; use prefix keywd to avoid impact to existing unit tests -DJ
-  / &{ params = []; DEBUG(1); return true; } __ ast:(union_stmt  / update_stmt / replace_insert_stmt ) __ SEMI? __ {
+//  = __ "ALT" __ alt:ALT_grammar { return alt; } //experimental; use prefix keywd to avoid impact to existing unit tests -DJ
+  = &{ params = []; DEBUG(1); return true; } __ ast:(union_stmt  / update_stmt / replace_insert_stmt ) __ SEMI? __ {
 //TODO: maybe params should not be cleared here? (proc_stmts can be recursive) -DJ
       return {
         ast   : ast,
@@ -1372,9 +1372,10 @@ mem_chain
 
 /////////////////////////////////////////////////////////////////////////////////
 ////
-/// alteranate grammar based on https://github.com/antlr/grammars-v4/blob/master/plsql/PlSqlParser.g4
+/// alternate grammar based on https://github.com/antlr/grammars-v4/blob/master/plsql/PlSqlParser.g4
 //
 
+/*
 ALT_SEMI = ';' ALT_SPACE?
 
 ALT_grammar
@@ -1567,7 +1568,8 @@ ALT_function_name
 ALT_identifier
 //    : (INTRODUCER char_set_name)? id_expression
 //    ;
-  = /*(ALT_INTRODUCER char_set_name)?*/ ALT_id_expression
+//  = (ALT_INTRODUCER char_set_name)? ALT_id_expression
+  = ALT_id_expression
 
 ALT_parameter_name
   = ALT_identifier
@@ -1694,7 +1696,7 @@ ALT_native_datatype_element
 //    | MLSLABEL
 //    ;
   = ('NVARCHAR2' / 'DEC' / 'INTEGER' / 'INT' / 'NUMERIC' / 'SMALLINT' / 'NUMBER' / 'DECIMAL' / 'FLOAT' / 'REAL' / 'NCHAR' / 'CHAR' / 'CHARACTER' / 'VARCHAR2' / 'VARCHAR' / 'STRING' / 'RAW') ALT_SPACE?
-
+*/
 
 //////////////////////////////////////////////////////////////////////////////////
 

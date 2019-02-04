@@ -30,7 +30,7 @@ options {
 }
 
 sql_script
-    : { return start_rule(); } ((unit_statement | sql_plus_command) SEMICOLON?)* EOF
+    : ((unit_statement | sql_plus_command) SEMICOLON?)* EOF
     ;
 
 //commented out unneeded stuff -DJ
@@ -112,8 +112,10 @@ alter_function
     : ALTER FUNCTION function_name COMPILE DEBUG? compiler_parameters_clause* (REUSE SETTINGS)? ';'
     ;
 
+//??added missing leading arg; seems to want at least one param? -DJ
 create_function_body
     : CREATE (OR REPLACE)? FUNCTION function_name ('(' (','? parameter)+ ')')?
+//    : CREATE (OR REPLACE)? FUNCTION function_name ('(' parameter (',' parameter)* ')')?
       RETURN type_spec (invoker_rights_clause | parallel_enable_clause | result_cache_clause | DETERMINISTIC)*
       ((PIPELINED? (IS | AS) (DECLARE? seq_of_declare_specs? body | call_spec)) | (PIPELINED | AGGREGATE) USING implementation_type_name) ';'
     ;
@@ -1867,8 +1869,9 @@ composite_list_partitions
         '(' (','? list_partition_desc)+ ')'
     ;
 
+//"?" needs to be optional in lieu of missing leading col name -DJ
 composite_hash_partitions
-    : PARTITION BY HASH '(' (',' column_name)+ ')'
+    : PARTITION BY HASH '(' (','? column_name)+ ')'
        (subpartition_by_range | subpartition_by_list | subpartition_by_hash)
          (individual_hash_partitions | hash_partitions_by_quantity)
     ;
@@ -3113,11 +3116,11 @@ return_statement
     ;
 
 function_call
-    : CALL? { return verb("func_call"); } routine_name function_argument?
+    : CALL? routine_name function_argument?
     ;
 
 procedure_call
-    : { return verb("proc_call"); } routine_name function_argument?
+    : routine_name function_argument?
     ;
 
 pipe_row_statement
@@ -3301,7 +3304,7 @@ subquery_operation_part
     ;
 
 query_block
-    : SELECT { return verb("select"); } (DISTINCT | UNIQUE | ALL)? (ASTERISK | (','? selected_element)+)
+    : SELECT { return verb("select"); }? (DISTINCT | UNIQUE | ALL)? (ASTERISK | (','? selected_element)+) { return DEBUG(8); }?
       into_clause? from_clause where_clause? hierarchical_query_clause? group_by_clause? model_clause?
     ;
 
@@ -3539,7 +3542,7 @@ for_update_options
     ;
 
 update_statement
-    : UPDATE { return verb("update"); } general_table_ref update_set_clause where_clause? static_returning_clause? error_logging_clause?
+    : UPDATE { return verb("update"); }? general_table_ref update_set_clause where_clause? static_returning_clause? error_logging_clause?
     ;
 
 // Update Specific Clauses
@@ -3555,11 +3558,11 @@ column_based_update_set_clause
     ;
 
 delete_statement
-    : DELETE { return verb("delete"); }FROM? general_table_ref where_clause? static_returning_clause? error_logging_clause?
+    : DELETE { return verb("delete"); }? FROM? general_table_ref where_clause? static_returning_clause? error_logging_clause?
     ;
 
 insert_statement
-    : INSERT { return verb("insert"); } (single_table_insert | multi_table_insert)
+    : INSERT { return verb("insert"); }? (single_table_insert | multi_table_insert)
     ;
 
 // Insert Specific Clauses
@@ -3757,13 +3760,13 @@ between_elements
     : concatenation AND concatenation
     ;
 
-//avoid recursion -DJ
+//avoid recursion, reorder (put ambiguous/optional last) -DJ
 concatenation
-    : model_expression
-        (AT (LOCAL | TIME ZONE concatenation) | interval_expression)?
-    | /*concatenation*/ model_expression op=(ASTERISK | SOLIDUS) concatenation
+    : /*concatenation*/ model_expression op=(ASTERISK | SOLIDUS) concatenation
     | /*concatenation*/ model_expression op=(PLUS_SIGN | MINUS_SIGN) concatenation
     | /*concatenation*/ model_expression BAR BAR concatenation
+    | model_expression
+        (AT (LOCAL | TIME ZONE concatenation) | interval_expression)?
     ;
 
 interval_expression
@@ -4139,7 +4142,7 @@ schema_name
     ;
 
 routine_name
-    : head=identifier tail=('.' id_expression)* ('@' link_name)? { return funcref(makename(head, tail, [1])); } /*keep*/
+    : /*{ return DEBUG(3); }?*/ head=identifier tail=('.' id_expression)* ('@' link_name)? { return funcref(head + tail.map((parts) => parts[1]).join(".")); }?;
     ;
 
 package_name
@@ -4243,11 +4246,11 @@ link_name
     ;
 
 column_name
-    : head=identifier tail=('.' id_expression)* { return colref(multiname(head, tail, [1])); } /*keep*/
+    : head=identifier tail=('.' id_expression)* { return colref(head + tail.map((part) => part[1]).join(".")); }?
     ;
 
 tableview_name
-    : head=identifier tail=('.' id_expression)? { return tblref(multiname(head, tail, 1)); } /*keep*/
+    : head=identifier tail=('.' id_expression)? { return tblref(head + (tail || []).join("")); }?
       ('@' link_name | /*TODO{!(input.LA(2) == BY)}?*/ partition_extension_clause)?
     ;
 
@@ -4284,8 +4287,10 @@ grant_object_name
     | SQL TRANSLATION PROFILE schema_object_name
     ;
 
+//??added missing leading col -DJ
 column_list
     : (','? column_name)+
+//??    : column_name (',' column_name)*
     ;
 
 paren_column_list
@@ -4299,12 +4304,16 @@ keep_clause
     : KEEP '(' DENSE_RANK (FIRST | LAST) order_by_clause ')' over_clause?
     ;
 
+//"," must be optional or add leading arg -DJ
 function_argument
     : '(' (','? argument)* ')' keep_clause?
+//    : '(' (argument (',' argument)* )? ')' keep_clause?
     ;
 
+//??added missing leading arg -DJ
 function_argument_analytic
     : '(' (','? argument respect_or_ignore_nulls?)* ')' keep_clause?
+//    : '(' (argument (',' argument respect_or_ignore_nulls?)* )? ')' keep_clause?
     ;
 
 function_argument_modeling
@@ -4318,7 +4327,8 @@ respect_or_ignore_nulls
     ;
 
 argument
-    : (identifier '=' '>')? expression
+//    : (identifier '=' '>')? expression //whitespace kludge -DJ
+    : (identifier [=] '>')? expression
     ;
 
 type_spec
@@ -4570,8 +4580,9 @@ quoted_string
     | NATIONAL_CHAR_STRING_LIT
     ;
 
+//don't allow keywords (false match on proc call) -DJ
 identifier
-    : (INTRODUCER char_set_name)? id_expression
+    : (INTRODUCER char_set_name)? id=id_expression ~{ return iskeywd(id); }? { return id; }
     ;
 
 id_expression

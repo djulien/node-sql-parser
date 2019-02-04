@@ -28,6 +28,7 @@ options {
 #include <PlSqlBaseLexer.h>
 }
 
+
 ABORT:                        'ABORT';
 ABS:                          'ABS';
 ACCESS:                       'ACCESS';
@@ -472,7 +473,7 @@ ENABLE_PRESET:                'ENABLE_PRESET';
 ENCODING:                     'ENCODING';
 ENCRYPT:                      'ENCRYPT';
 ENCRYPTION:                   'ENCRYPTION';
-END:                          'END';
+END:                          'END' ;//{ return DEBUG("end"); }?;
 END_OUTLINE_DATA:             'END_OUTLINE_DATA';
 ENFORCED:                     'ENFORCED';
 ENFORCE:                      'ENFORCE';
@@ -2301,7 +2302,7 @@ fragment QS_OTHER_CH: ~('<' | '{' | '[' | '(' | ' ' | '\t' | '\n' | '\r');
 //avoid "infinite loop" error in peg: -DJ
 //kludge: avoid strings to prevent white space -DJ
 //DELIMITED_ID: '"' (~('"' | '\r' | '\n') | '"' '"')+ '"' ;
-DELIMITED_ID: ["]  ( [^"\r\n]  |  ["]["])+ '"';
+DELIMITED_ID: ["]  inner=( [^"\r\n]  |  ["]["])+ '"' { return inner.join(""); };
 
 PERCENT:                   '%';
 AMPERSAND:                 '&';
@@ -2372,7 +2373,7 @@ START_CMD
 
 //kludge: avoid strings to prevent white space -DJ
 //REGULAR_ID: SIMPLE_LETTER (SIMPLE_LETTER | '$' | '_' | '#' | [0-9])*;
-REGULAR_ID: SIMPLE_LETTER (SIMPLE_LETTER | [$_#0-9])* TOKEND;
+REGULAR_ID: head=SIMPLE_LETTER tail=(SIMPLE_LETTER | [$_#0-9])* TOKEND { return head + tail.join(""); };
 
 SPACES: [ \t\r\n]+ -> channel(HIDDEN);
 

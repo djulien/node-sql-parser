@@ -23,8 +23,8 @@ plsql.pegjs: peg/PlSql*.g4
 #	peg/ant2peg.js peg/PlSqlParser.g4 > peg/PlSqlParser.pegjs
 	if [ -f peg/plsql.pegjs ]; then mv peg/plsql.pegjs peg/plsql-BK.pegjs; fi
 	echo "//parser generated `date +"%x %X"`" > peg/plsql.pegjs
-	cat peg/custom.js >> peg/plsql.pegjs
-	peg/extract.js peg/*.g4 | peg/ant2peg.js - >> peg/plsql.pegjs
+#	cat peg/custom.js >> peg/plsql.pegjs
+	peg/extract.js peg/*.g4 | peg/ant2peg.js peg/custom.js - >> peg/plsql.pegjs
 #	#manual fixups (comment out stuff near top)
 
 plsql: peg/PlSql*.g4 plsql.pegjs
@@ -32,5 +32,9 @@ plsql: peg/PlSql*.g4 plsql.pegjs
 #	@cat peg/PlSql*[!BK].pegjs > peg/plsql.pegjs
 	./node_modules/pegjs/bin/pegjs -o ./base/plsql.js peg/plsql.pegjs
 	@echo "new parser generated ok."
+
+djsql: peg/djsql.pegjs
+	echo "//parser generated `date +"%x %X"`" > ../scripts/djsql.pegjs
+	./node_modules/pegjs/bin/pegjs peg/djsql.pegjs >> ../scripts/djsql.js
 
 .PHONY: test

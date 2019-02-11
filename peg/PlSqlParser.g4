@@ -114,10 +114,11 @@ alter_function
 
 //??added missing leading arg; seems to want at least one param? -DJ
 //make "create" optional -DJ
+//remove unneeded stuff -DJ
 create_function_body
     : (CREATE (OR REPLACE)?)? FUNCTION function_name ('(' (','? parameter)+ ')')?
 //    : CREATE (OR REPLACE)? FUNCTION function_name ('(' parameter (',' parameter)* ')')?
-      RETURN type_spec (invoker_rights_clause | parallel_enable_clause | result_cache_clause | DETERMINISTIC)*
+      RETURN type_spec // (invoker_rights_clause | parallel_enable_clause | result_cache_clause | DETERMINISTIC)*
       ((PIPELINED? (IS | AS) (DECLARE? seq_of_declare_specs? body | call_spec)) | (PIPELINED | AGGREGATE) USING implementation_type_name) ';'
     ;
 
@@ -205,9 +206,10 @@ alter_procedure
     : ALTER PROCEDURE procedure_name COMPILE DEBUG? compiler_parameters_clause* (REUSE SETTINGS)? ';'
     ;
 
+//remove unneeded stuff -DJ
 function_body
     : FUNCTION identifier ('(' parameter (',' parameter)* ')')?
-      RETURN type_spec (invoker_rights_clause | parallel_enable_clause | result_cache_clause | DETERMINISTIC)*
+      RETURN type_spec // (invoker_rights_clause | parallel_enable_clause | result_cache_clause | DETERMINISTIC)*
       ((PIPELINED? (IS | AS) (DECLARE? seq_of_declare_specs? body | call_spec)) | (PIPELINED | AGGREGATE) USING implementation_type_name) ';'
     ;
 
@@ -217,9 +219,10 @@ procedure_body
     ;
 
 //make "create" optional -DJ
+//remove unneeded stuff -DJ
 create_procedure_body
     : (CREATE (OR REPLACE)?)? PROCEDURE procedure_name ('(' parameter (',' parameter)* ')')?
-      invoker_rights_clause? (IS | AS)
+      /*invoker_rights_clause?*/ (IS | AS)
       (DECLARE? seq_of_declare_specs? body | call_spec | EXTERNAL) ';'
     ;
 
@@ -3065,7 +3068,7 @@ if_statement
     ;
 
 elsif_part
-    : ELSIF condition THEN seq_of_statements
+    : ELSIF /*{ return DEBUG(33); }?*/ condition THEN seq_of_statements
     ;
 
 else_part
@@ -3196,8 +3199,10 @@ open_statement
     : OPEN cursor_name ('(' expressions? ')')?
     ;
 
+//fix ambiguous element list (too greedy) -DJ
 fetch_statement
-    : FETCH cursor_name (it1=INTO (','? variable_name)+ | BULK COLLECT INTO (','? variable_name)+)
+//    : FETCH cursor_name (it1=INTO (','? variable_name)+ | BULK COLLECT INTO (','? variable_name)+)
+    : FETCH cursor_name (it1=INTO variable_name (',' variable_name)* | BULK COLLECT INTO variable_name (',' variable_name)*)
     ;
 
 open_for_statement
@@ -3274,8 +3279,10 @@ select_statement
 
 // Select Specific Clauses
 
+//fix ambiguous element list (too greedy) -DJ
 subquery_factoring_clause
-    : WITH (','? factoring_element)+
+//    : WITH (','? factoring_element)+
+    : WITH factoring_element (',' factoring_element)*
     ;
 
 factoring_element
@@ -3305,8 +3312,10 @@ subquery_operation_part
     : (UNION ALL? | INTERSECT | MINUS) subquery_basic_elements
     ;
 
+//fix ambiguous element list (too greedy) -DJ
 query_block
-    : SELECT { return verb("select"); }? (DISTINCT | UNIQUE | ALL)? (ASTERISK | (','? selected_element)+) { return DEBUG(8); }?
+//    : SELECT { return verb("select"); }? (DISTINCT | UNIQUE | ALL)? (ASTERISK | (','? selected_element)+) { return DEBUG(8); }?
+    : SELECT { return verb("select"); }? (DISTINCT | UNIQUE | ALL)? (ASTERISK | selected_element (',' selected_element)*) { return DEBUG(8); }?
       into_clause? from_clause where_clause? hierarchical_query_clause? group_by_clause? model_clause?
     ;
 
@@ -3323,8 +3332,10 @@ select_list_elements
     | (regular_id '.')? expressions
     ;
 
+//fix ambiguous element list (too greedy) -DJ
 table_ref_list
-    : (','? table_ref)+
+//    : (','? table_ref)+
+    : table_ref (',' table_ref)*
     ;
 
 // NOTE to PIVOT clause
@@ -3423,9 +3434,12 @@ start_part
     : START WITH condition
     ;
 
+//fix ambiguous element list (too greedy) -DJ
 group_by_clause
-    : GROUP BY (','? group_by_elements)+ having_clause?
-    | having_clause (GROUP BY (','? group_by_elements)+)?
+//    : GROUP BY (','? group_by_elements)+ having_clause?
+    : GROUP BY group_by_elements (',' group_by_elements)* having_clause?
+//    | having_clause (GROUP BY (','? group_by_elements)+)?
+    | having_clause (GROUP BY group_by_elements (',' group_by_elements)*)?
     ;
 
 group_by_elements
@@ -3513,8 +3527,10 @@ until_part
     : UNTIL '(' condition ')'
     ;
 
+//fix ambiguous element list (too greedy) -DJ
 order_by_clause
-    : ORDER SIBLINGS? BY (','? order_by_elements)+
+//    : ORDER SIBLINGS? BY (','? order_by_elements)+
+    : ORDER SIBLINGS? BY order_by_elements (',' order_by_elements)*
     ;
 
 order_by_elements
@@ -3717,13 +3733,23 @@ cursor_expression
     ;
 
 //avoid recursion -DJ
+//reorder to give AND/OR priority -DJ
+//refactor for more efficient parsing (avoid multiple model_expr eval) -DJ
 logical_expression
-    : multiset_expression (IS NOT?
+    : /*logical_expression*/ multiset_expression 
+        ( AND logical_expression
+        | OR logical_expression
+        | IS NOT? (NULL_ | NAN | PRESENT | INFINITE | A_LETTER SET | EMPTY | OF TYPE? '(' ONLY? type_spec (',' type_spec)* ')')+
+        )?
+    | NOT logical_expression
+    ;
+SLOWER_logical_expression
+    : /*logical_expression*/ multiset_expression AND logical_expression
+    | /*logical_expression*/ multiset_expression OR logical_expression
+    | multiset_expression (IS NOT?
         (NULL_ | NAN | PRESENT | INFINITE | A_LETTER SET | EMPTY | OF TYPE?
         '(' ONLY? type_spec (',' type_spec)* ')'))*
     | NOT logical_expression
-    | /*logical_expression*/ multiset_expression AND logical_expression
-    | /*logical_expression*/ multiset_expression OR logical_expression
     ;
 
 multiset_expression
@@ -3763,7 +3789,16 @@ between_elements
     ;
 
 //avoid recursion, reorder (put ambiguous/optional last) -DJ
+//refactor for more efficient parsing (avoid multiple model_expr eval) -DJ
 concatenation
+    : /*concatenation*/ model_expression
+        ( op=(ASTERISK | SOLIDUS) concatenation 
+        | op=(PLUS_SIGN | MINUS_SIGN) concatenation
+        | BAR BAR concatenation
+        | AT (LOCAL | TIME ZONE concatenation) | interval_expression
+        )?
+    ;
+SLOWER_concatenation
     : /*concatenation*/ model_expression op=(ASTERISK | SOLIDUS) concatenation
     | /*concatenation*/ model_expression op=(PLUS_SIGN | MINUS_SIGN) concatenation
     | /*concatenation*/ model_expression BAR BAR concatenation
@@ -3856,6 +3891,7 @@ quantified_expression
     : (SOME | EXISTS | ALL | ANY) ('(' subquery ')' | '(' expression ')')
     ;
 
+//add INSTR -DJ
 string_function
     : SUBSTR '(' expression ',' expression (',' expression)? ')'
     | TO_CHAR '(' (table_element | standard_function | expression)
@@ -3865,6 +3901,7 @@ string_function
     | NVL '(' expression ',' expression ')'
     | TRIM '(' ((LEADING | TRAILING | BOTH)? quoted_string? FROM)? concatenation ')'
     | TO_DATE '(' expression (',' quoted_string)? ')'
+    | INSTR '(' expression ',' expression ')'  //{ return DEBUG(44); }
     ;
 
 standard_function
@@ -3993,8 +4030,10 @@ windowing_elements
     | concatenation (PRECEDING | FOLLOWING)
     ;
 
+//fix ambiguous element list (too greedy) -DJ
 using_clause
-    : USING (ASTERISK | (','? using_element)+)
+//    : USING (ASTERISK | (','? using_element)+)
+    : USING (ASTERISK | using_element (',' using_element)*)
     ;
 
 using_element
@@ -4069,10 +4108,10 @@ xmlserialize_param_ident_part
 //commented out unneeded stuff -DJ
 sql_plus_command
     : '/'
-    | EXIT
-    | PROMPT_MESSAGE
+//    | EXIT
+//    | PROMPT_MESSAGE
     | SHOW (ERR | ERRORS)
-    | START_CMD
+//    | START_CMD
 //    | whenever_command
 //    | set_command
     | sql_statement //allow immediate commands -DJ
@@ -4108,8 +4147,11 @@ where_clause
     : WHERE (CURRENT OF cursor_name | expression)
     ;
 
+
+//fix ambiguous element list (too greedy) -DJ
 into_clause
-    : (BULK COLLECT)? INTO (','? variable_name)+
+//    : (BULK COLLECT)? INTO (','? variable_name)+
+    : (BULK COLLECT)? INTO variable_name (',' variable_name)*
     ;
 
 // Common Named Elements
@@ -4289,10 +4331,11 @@ grant_object_name
     | SQL TRANSLATION PROFILE schema_object_name
     ;
 
-//??added missing leading col -DJ
+//fix ambiguous element list (too greedy) -DJ
+//added missing leading col -DJ
 column_list
-    : (','? column_name)+
-//??    : column_name (',' column_name)*
+//    : (','? column_name)+
+    : column_name (',' column_name)*
     ;
 
 paren_column_list
@@ -6733,13 +6776,19 @@ non_reserved_keywords_pre12c
     | ZONE
     ;
 
+//add INSTR, NVL, TO_DATE -DJ
+//NOTE: this rule is unused
 string_function_name
     : CHR
     | DECODE
     | SUBSTR
     | TO_CHAR
     | TRIM
+    | NVL
+    | TO_DATE
+    | INSTR
     ;
+
 
 numeric_function_name
     : AVG

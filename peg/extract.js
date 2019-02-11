@@ -50,6 +50,7 @@ if (numlines(src) != numlines(sv_src)) throw 'lost lines @4'.red;
         if (WANT_LIST) console.log(`${inx / GROUPING}/${all.length / GROUPING}`, sname, srcline);
         if (blocks[sname]) throw `dupl block[${inx / GROUPING}/${all.length / GROUPING}] '${sname}' ${srcline}, previous was ${blocks[sname].srcline}`.red;
         const blk_txt = all[inx] + all[inx + GROUPING - 1]; //.slice(inx, inx + GROUPING).join(""); //all[inx - 1] + all[inx + 3];
+//if ((all[inx + 3] || "").match(/newline/i) && !all[inx + 3].match(/newline_eof/i)) console.error(srcline, sname, blk_txt);
         blocks[sname] = {text: blk_txt, srcline};
         line_num += numlines(blk_txt) - 1;
         if (line_num > numlines(sv_src)) throw `line# ovfl at '${sname}' ${srcline}`.red;
@@ -81,11 +82,13 @@ function keep(name, from)
     }
     keep.blocks[name] = blocks[name];
     const child_re = new RegExp(SYMBOL, "gi");
+    if (blocks[name].text.match(/','\?/) && !blocks[name].text.match(/'\('/)) console.error(`check rule '${name}' for over-greediness!`.yellow);
 //remove various parts to prevent extraneous symbol names:
     const srch_txt = blocks[name].text
-        .replace(/\\./g, "").replace(/'[^']*'/g, "").replace(/"[^"]*"/g, "") //strip strings
-        .replace(/\[[^]+\]/g, "") //strip char sets
-        .replace(/\{[^}]+\}/g, "") //strip code escapes
+//        .replace(/\\./g, "").replace(/'[^']*'/g, "").replace(/"[^"]*"/g, "") //strip strings
+//        .replace(/\[[^]+\]/g, "") //strip char sets
+//        .replace(/\{[^}]+\}/g, "") //strip code escapes
+        .replace(/'[^'\r\n]*?'|"[^"\r\n]*?"|\[[^\]\r\n]*?\]|\{[^}\r\n]+\}|\/\*[\S\s]*?\*\/|\/\/[^\n]*/gm, " ") //match strings, sets, and comments first so they can be excluded (non-captured); non-greedy; TODO: escaped quotes?
         .replace(new RegExp(`${SYMBOL}\s*=`, "gmi"), ""); //strip var captures
     for (;;)
     {

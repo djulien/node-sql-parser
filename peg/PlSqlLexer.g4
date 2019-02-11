@@ -2278,7 +2278,8 @@ PERIOD:         '.';
     (D | F)?
     ;*/
 
-UNSIGNED_INTEGER:    [0-9]+;
+UNSIGNED_INTEGER:    [0-9]+ WHITE_SPACE; //eat white space after numeric const -DJ
+
 //kludge: avoid strings to prevent white space -DJ
 //APPROXIMATE_NUM_LIT: FLOAT_FRAGMENT ('E' ('+'|'-')? (FLOAT_FRAGMENT | [0-9]+))? ('D' | 'F')?;
 APPROXIMATE_NUM_LIT: FLOAT_FRAGMENT ([E] [-+]? (FLOAT_FRAGMENT | [0-9]+))? [DF]? TOKEND;
@@ -2382,7 +2383,8 @@ SPACES: [ \t\r\n]+ -> channel(HIDDEN);
 fragment NEWLINE_EOF    : NEWLINE | EOF;
 fragment QUESTION_MARK  : '?';
 fragment SIMPLE_LETTER  : [A-Za-z]; //allow lower case -DJ
-fragment FLOAT_FRAGMENT : UNSIGNED_INTEGER* [.]? UNSIGNED_INTEGER+ ![0-9]; //is !dig look-ahead needed? -DJ
+//fragment FLOAT_FRAGMENT : UNSIGNED_INTEGER* [.]? UNSIGNED_INTEGER+ ![0-9]; //is !dig look-ahead needed? -DJ
+fragment FLOAT_FRAGMENT : [0-9]* [.]? UNSIGNED_INTEGER+ ![0-9]; //is !dig look-ahead needed? -DJ
 //kludge: avoid strings to prevent white space -DJ
 //fragment NEWLINE        : '\r'? '\n';
 fragment NEWLINE        : [\r]? [\n];

@@ -45,7 +45,7 @@ const util = require("util");
 //        peg$maxFailExpected.push(expected);
 //inspect(__stack[0]);
 //console.log(__stack.map((stkfr) => stkfr.getFunctionName()).join(" -> "));
-        const where = __stack.slice(1).map((stkfr) => (stkfr.getFunctionName() || "?").replace(/^peg\$parse/, "")).join("->");
+        const where = __stack.slice(1).map((stkfr) => (stkfr.getFunctionName() || "?").replace(/^peg\$parse/, "")).reverse().join(" -> ");
         peg$maxFailExpected.push(Object.assign({}, expected, {where})); //show rule stack
     }
 
@@ -74,16 +74,16 @@ debugger;
         return {ofs: info.start.offset, line: info.start.line, col: info.start.column}; //abreviated info
     }
 
-    let state =
-    {
-        verbs: [], //stack
-        tbls: {},
-        cols: {},
+    const state = {};
+//    {
+//        verbs: [], //stack
+//        tbls: {},
+//        cols: {},
 //        var_defs: {},
 //        var_refs: {},
-        func_defs: {},
-        func_refs: {},
-    };
+//        func_defs: {},
+//        func_refs: {},
+//    };
 
 //    function start_rule()
 //    {
@@ -145,10 +145,14 @@ debugger;
     function init(srcline)
     {
         state.srcline = srcline;
-        state.verb = [];
+        Object.defineProperty(state, "started", {value: Date.now(), writable: true}); //!enum
+        state.verbs = [];
         state.tbls = {};
         state.cols = {};
-        state.funcs = {};
+        state.func_defs = {};
+        state.func_refs = {};
+//        var_defs: {},
+//        var_refs: {},
     }
 
 //add keywords to reservedMap{} rather than using separate rules:
@@ -176,8 +180,12 @@ debugger;
     }
 */
 
+    function commas(num) { return num.toLocaleString(); } //grouping (1000s) default = true
+
     function results()
     {
+        state.elapsed = `${commas(Date.now() - state.started)} msec`;
+        state.started = null;
         inspect(state); //TODO: return this to caller
         return true;
     }

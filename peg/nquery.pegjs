@@ -10,17 +10,86 @@
 //  require("magic-globals");
 
  //make debug easier -DJ
-  function DEBUG(n)
-  {
+//return "true" so these can all be embedded into grammar rules:
+    function DEBUG(n)
+    {
 //    var called_from = __stack[1].getLineNumber();
-    if (!DEBUG.seen) debugger; //first time only;
-    DEBUG.seen = true;
-    return true;
-  }
-  function inbuf() //BROKEN
-  {
-    debug(input.slice(pre$currPos).replace(/\n/g, "\\n"));
-  }
+        if (!DEBUG.seen) DEBUG.seen = {};
+        ++DEBUG.seen[n] || (DEBUG.seen[n] = 1);
+console.error(`DEBUG(${n}) ${state.srcline}`.red);
+//if (!DEBUG.seen) debugger; //first time only;
+debugger;
+        if (n < 0) throw `DEBUG(${n})`.red;
+        return true;
+    }
+
+//  function inbuf() //BROKEN
+//  {
+//    debug(input.slice(pre$currPos).replace(/\n/g, "\\n"));
+//  }
+
+    let state =
+    {
+        verb: [], //stack
+        tbls: {},
+        cols: {},
+        funcs: {},
+    };
+
+    function colref(name)
+    {
+        ++state.cols[name] || (state.cols[name] = 1);
+//debugger;
+        return true;
+    }
+
+    function tblref(name)
+    {
+        ++state.tbls[name] || (state.tbls[name] = 1);
+//debugger;
+        return true;
+    }
+
+    function funcref(name)
+    {
+        ++state.funcs[name] || (state.funcs[name] = 1);
+//debugger;
+        return true;
+    }
+
+    function verb(name)
+    {
+        if (!name) state.verb.pop();
+        else state.verb.push(name);
+//debugger;
+        return true;
+    }
+
+    function init(srcline)
+    {
+        state.srcline = srcline;
+        state.verb = [];
+        state.tbls = {};
+        state.cols = {};
+        state.funcs = {};
+    }
+
+    function results()
+    {
+        inspect(state); //TODO: return this to caller
+        return true;
+    }
+
+    function iskeywd(str)
+    {
+        const keywds =
+        {
+//            #KEYWORDS#
+        };
+        return keywds[str.toUpperCase()];
+    }
+
+/////////////////////////////////////////////////////////////////////////////////////////////
 
   var reservedMap = module.exports.reservedMap || {};
 //disambiguate plain proc vars: -DJ
@@ -166,13 +235,20 @@ require("colors").enabled = true; //for console output; https://github.com/Marak
 /////////////////////////////////////////////////////////////////////////////////
 
 //use new top-level rules: -DJ
-start = "DJTEST" sql_script / old_start
+//start = "DJTEST" { return DEBUG(0); }? sql_script / old_start
+start
+  = __ srcline sql_script { return results(); }
+  / old_start ;
+
+srcline
+  = '@' file:[^:]+ ':' line:[0-9]+ ![0-9] { init(`${file.join("")}:${line.join("")}`); return DEBUG(0); }
+
 
 //added "debugger" for easier debug -DJ
 //allow trailing white space and ";" -DJ
 old_start 
 //  = __ "ALT" __ alt:ALT_grammar { return alt; } //experimental; use prefix keywd to avoid impact to existing unit tests -DJ
-  = &{ params = []; DEBUG(1); return true; } __ ast:(union_stmt  / update_stmt / replace_insert_stmt ) __ SEMI? __ {
+  = &{ params = []; /*DEBUG(1)*/; return true; } __ ast:(union_stmt  / update_stmt / replace_insert_stmt ) __ SEMI? __ {
 //TODO: maybe params should not be cleared here? (proc_stmts can be recursive) -DJ
       return {
         ast   : ast,
@@ -1114,7 +1190,7 @@ EOF = !.
 SEMI      = ';' __ //need terminator for multiple proc stmts
 
 //reworked top levels: -DJ
-//eat leading white space for simpler token parsing:
+//eat leading white space for simpler token parsing
 sql_script = __ seq_of_statements
 //  = __ ((unit_statement / sql_plus_command) SEMI?)* EOF
 //  = __ s:seq_of_statements EOF { return s; }
@@ -1131,7 +1207,7 @@ label_declaration
 statement
   = body
   / block
-  / assignment_statement
+  / assign_stmt //assignment_statement
 //  / continue_statement
 //  / exit_statement
 //  / goto_statement
@@ -1192,7 +1268,7 @@ data_manipulation_language_statements
   //;
 
 /*
-cursor_manipulation_statements
+X_cursor_manipulation_statements
   = close_statement
   / open_statement
   / fetch_statement
@@ -1232,7 +1308,7 @@ block
   = KKW_DECLARE? declare_spec+ body
   //;
 
-assignment_statement = proc_var __
+//assignment_statement = proc_var __
 //  = (general_element / bind_variable) ASSIGN_OP expression
   //;
 //general_element
@@ -1262,19 +1338,19 @@ anonymous_block
   = (KKW_DECLARE seq_of_declare_specs)? KKW_BEGIN seq_of_statements (KKW_EXCEPTION exception_handler+)? KKW_END SEMI
 
 procedure_call
-  = routine_name function_argument?
+  = routine_name arg_list? //function_argument?
   //;
 
 function_call
-  = KKW_CALL? routine_name function_argument?
+  = KKW_CALL? routine_name arg_list? //function_argument?
   //;
 
 //shims to old stuff up above:
 select_statement = st:union_stmt __ { return st; }
 update_statement = st:update_stmt __{ return st; }
 insert_statement = st:replace_insert_stmt __{ return st; }
-routine_name = id:ident __ { return id; } //?? name:ident m:mem_chain
-function_argument = a:arg_def __ { return a; }
+routine_name = id:ident m:mem_chain __ { return id; } //?? name:ident m:mem_chain
+//function_argument = a:arg_def __ { return a; }
 general_table_ref = t:table_ref __ { return t; }
 identifier = i:ident __ { return i; }
 type_spec = d:data_type __ { return d; }
@@ -1296,7 +1372,8 @@ delete_statement
   //;
 
 seq_of_declare_specs
-  = declare_spec+
+//  = declare_spec+
+  = (declare_spec (SEMI / EOF))+
   //;
 
 static_returning_clause
@@ -1326,14 +1403,14 @@ error_logging_clause
 
 
 function_body
-  = KKW_FUNCTION identifier arg_list? //(LPAREN __ (COMMA? __ parameter)+ __ RPAREN)?
+  = KKW_FUNCTION identifier arg_def_list? //(LPAREN __ (COMMA? __ parameter)+ __ RPAREN)?
     KKW_RETURN type_spec /*(invoker_rights_clause | parallel_enable_clause | result_cache_clause | DETERMINISTIC)* */
-    ((/*PIPELINED?*/ (KKW_IS / KKW_AS) (KKW_DECLARE? seq_of_declare_specs? body /*| call_spec*/))) SEMI // | (PIPELINED | AGGREGATE) USING implementation_type_name) SEMI
+    ((/*PIPELINED?*/ (KKW_IS / KKW_AS) (KKW_DECLARE? seq_of_declare_specs? body /*| call_spec*/))) // SEMI // | (PIPELINED | AGGREGATE) USING implementation_type_name) SEMI
   //;
 
 procedure_body
-  = KKW_PROCEDURE identifier arg_list? /*(LPAREN __ (COMMA? __ parameter)+ __ RPAREN)?*/ (KKW_IS / KKW_AS)
-    (KKW_DECLARE? seq_of_declare_specs? body) SEMI // | call_spec | EXTERNAL) SEMI
+  = KKW_PROCEDURE identifier arg_def_list? /*(LPAREN __ (COMMA? __ parameter)+ __ RPAREN)?*/ (KKW_IS / KKW_AS)
+    (KKW_DECLARE? seq_of_declare_specs? body) // SEMI // | call_spec | EXTERNAL) SEMI
   //;
 
 exception_declaration
@@ -1366,11 +1443,11 @@ declare_spec
 
 
 procedure_spec
-  = KKW_PROCEDURE identifier arg_list SEMI // ('(' parameter ( ',' parameter )* ')')? ';'
+  = KKW_PROCEDURE identifier arg_def_list // SEMI // ('(' parameter ( ',' parameter )* ')')? ';'
   //;
 
 function_spec
-  = KKW_FUNCTION identifier arg_list // ('(' parameter ( ',' parameter)* ')')?
+  = KKW_FUNCTION identifier arg_def_list // ('(' parameter ( ',' parameter)* ')')?
     KKW_RETURN type_spec SEMI // (DETERMINISTIC)? (RESULT_CACHE)? ';'
   //;
 
@@ -1407,10 +1484,10 @@ exception_handler
   = KKW_WHEN exception_name (KKW_OR exception_name)* KKW_THEN seq_of_statements
 
 if_statement
-  = KKW_IF condition KKW_THEN seq_of_statements/*+*/ elsif_part* else_part? KKW_END KKW_IF
+  = KKW_IF &{ return DEBUG(8); } condition KKW_THEN seq_of_statements/*+*/ elsif_part* else_part? KKW_END KKW_IF
 
 elsif_part
-  = KKW_ELSIF condition KKW_THEN seq_of_statements/*+*/
+  = KKW_ELSIF &{ return DEBUG(9); } condition KKW_THEN seq_of_statements/*+*/
 
 else_part
   = KKW_ELSE seq_of_statements/*+*/
@@ -1479,6 +1556,13 @@ X_proc_def
   }
 
 arg_list 
+//  = LPAREN __ head:arg_def tail:(__ COMMA __ arg_def)* __ RPAREN __ {
+  = LPAREN __ args:proc_primary_list_or_empty __ RPAREN __ {
+    return args; //createList(head, tail);
+//NO  / proc_stmt* //creates "infinite loop" error
+  } 
+
+arg_def_list 
   = LPAREN __ head:arg_def tail:(__ COMMA __ arg_def)* __ RPAREN __ {
     return createList(head, tail);
 //NO  / proc_stmt* //creates "infinite loop" error
@@ -1532,7 +1616,7 @@ proc_var
 //allow proc call, other proc stmts -DJ
 //BROKEN-ignore extraneous BEGIN/END (can be nested) -DJ
 /*
-proc_def = EOF
+X_proc_def = EOF
 X_proc_stmt 
   = &{ varList = []; return true; } __ s:(assign_stmt / return_stmt / proc_func_call / proc_if / proc_def) {
 //TODO: maybe varList should not be cleared here? (proc_stmts can be recursive) -DJ
@@ -1554,7 +1638,7 @@ X_proc_stmt
  //KKW_ENDIF = KW_END __ KW_IF
 
 /*
-proc_if
+X_proc_if
   = /-*&{ return DEBUG(2); }*-/ KW_IF __ e:proc_expr __ KW_THEN __ t:proc_stmts __ SEMI? __ f:else_stmt? __ KW_ENDIF {
       return {
         stmt: "if",
@@ -1564,7 +1648,7 @@ proc_if
       }
     }
 
-else_stmt
+X_else_stmt
   = KW_ELSIF __ e:proc_expr __ KW_THEN __ t:proc_stmts __ SEMI? __ f:else_stmt? {
       return {
         stmt: "elsif",

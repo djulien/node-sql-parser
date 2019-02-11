@@ -75,7 +75,7 @@ if (!NEW) src = src.replace_log(/->/g, "'->'");
 console.error(`${bname} ${commas(numlines(src))} lines, ${commas(src.length)} chars converted, ${commas(numkeys(keywds) - sv_count)} keywords found`.green);
 });
 
-const src = out.join("\n").replace(/^\s*#KEYWORDS#\s*$/m, `//${numkeys(keywds)} keywords:\n` + Object.keys(keywds).map((keywd) => `\t\t\t'${keywd.toUpperCase()}': true,`).join("\n"));
+const src = out.join("\n").replace(/^\s*#KEYWORDS#\s*(\/\/[^\n]+)?$/m, `//${numkeys(keywds)} keywords: $1\n` + Object.keys(keywds).map((keywd) => `\t\t\t'${keywd.toUpperCase()}': true,`).join("\n"));
 console.log(src);
 console.error(`total ${commas(numlines(src))} lines, ${commas(src.length)} chars, ${commas(numkeys(keywds))} keywords`.green);
 
@@ -86,11 +86,13 @@ console.error(`total ${commas(numlines(src))} lines, ${commas(src.length)} chars
 //console.log(str.replace(re2, (match, x, y) => x? ` <<${x}>> `: y? ` ##${y}## `: match));
 //process.exit();
 
-//exclude re matches from sets, strings:
+//exclude re matches from sets, strings, and comments by matching those first (caller must replace as-is):
 function exclre(re)
 {
-    const excludes_re = /\n\{[\s\S\r\n]*?\n\}|'[^'\r\n]*?'|"[^"\r\n]*?"|\[[^\]\r\n]*?\]|\{[^}\r\n]+\}|/g; //match strings and sets first so they can be excluded (non-captured); non-greedy; TODO: escaped quotes
-    return new RegExp(excludes_re.source + re.source, dedupe(excludes_re.flags + re.flags));
+    const excludes_re = /\n\{[\s\S\r\n]*?\n\}|'[^'\r\n]*?'|"[^"\r\n]*?"|\[[^\]\r\n]*?\]|\{[^}\r\n]+\}|\/\*[\S\s]*?\*\/|\/\/[^\n]*|--[^\n]*|/g; //match strings, sets, and comments first so they can be excluded (non-captured); non-greedy; TODO: escaped quotes?
+    const retval = new RegExp(excludes_re.source + re.source, dedupe(excludes_re.flags + re.flags));
+    retval.pre_excl = re;
+    return retval;
 }
 
 function dedupe(str)
@@ -109,7 +111,7 @@ function extensions()
     String.prototype.replace_log = function(re, newstr)
     {
         let retval = this.replace.apply(this, arguments);
-        if (retval == this) console.error(`Did not replace '${re}' @${__stack[1].getLineNumber()} in ${extensions.bname}`.yellow);
+        if (retval == this) console.error(`Did not replace '${re.pre_excl || re}' @${__stack[1].getLineNumber()} in ${extensions.bname}`.yellow);
         return retval;
     }
 }

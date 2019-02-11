@@ -9,15 +9,6 @@ require("colors").enabled = true; //for console output; https://github.com/Marak
 const util = require("util");
 
 //    const HELLO = "hello";
-    let state =
-    {
-        verb: [], //stack
-        tbls: {},
-        cols: {},
-        funcs: {},
-    };
-
-//TODO: add keywords to reservedMap{} rather than using separate rules
 
 //debug info:
     function debug(str) { console.log(str); }
@@ -61,18 +52,38 @@ const util = require("util");
 //make it easier to see where error is:
     function highlight(str, ofs, len)
     {
-        return `${str.slice(ofs - len, ofs - 1).blue}${str.slice(ofs -1, ofs + 1).red}${str.slice(ofs + 1, ofs + len).blue}`.replace(/\n/g, "\\n");
+        return `${str.slice(Math.max(ofs - len, 0), Math.max(ofs - 1, 0)).blue}${str.slice(Math.max(ofs -1, 0), ofs + 1).red}${str.slice(ofs + 1, ofs + len).blue}`.replace(/\n/g, "\\n");
     }
 
 //return "true" so these can all be embedded into grammar rules:
     function DEBUG(n)
     {
+//    var called_from = __stack[1].getLineNumber();
         if (!DEBUG.seen) DEBUG.seen = {};
         ++DEBUG.seen[n] || (DEBUG.seen[n] = 1);
+console.error(`DEBUG(${n}) ${state.srcline}`.red);
+//if (!DEBUG.seen) debugger; //first time only;
 debugger;
-        if (n < 0) throw `DEBUG(${n})`.red;
+        if (n < 0) throw `DEBUG(${n}) ${state.srcline}`.red;
         return true;
     }
+
+    function my_location()
+    {
+        const info = location(); //peg start/end info
+        return {ofs: info.start.offset, line: info.start.line, col: info.start.column}; //abreviated info
+    }
+
+    let state =
+    {
+        verbs: [], //stack
+        tbls: {},
+        cols: {},
+//        var_defs: {},
+//        var_refs: {},
+        func_defs: {},
+        func_refs: {},
+    };
 
 //    function start_rule()
 //    {
@@ -82,29 +93,37 @@ debugger;
 
     function colref(name)
     {
-        ++state.cols[name] || (state.cols[name] = 1);
+        (state.cols[name] || (state.cols[name] = [])).push(my_location());
 //debugger;
         return true;
     }
 
     function tblref(name)
     {
-        ++state.tbls[name] || (state.tbls[name] = 1);
+        (state.tbls[name] || (state.tbls[name] = [])).push(my_location());
 //debugger;
         return true;
     }
 
     function funcref(name)
     {
-        ++state.funcs[name] || (state.funcs[name] = 1);
+        (state.func_refs[name] || (state.func_refs[name] = [])).push(my_location());
+//debugger;
+        return true;
+    }
+
+    function funcdef(name)
+    {
+        (state.func_defs[name] || (state.func_defs[name] = [])).push(my_location());
 //debugger;
         return true;
     }
 
     function verb(name)
     {
-        if (!name) state.verb.pop();
-        else state.verb.push(name);
+//        if (!name) state.verb.pop();
+//        else state.verb.push(name);
+        (state.verbs[name] || (state.verbs[name] = [])).push(my_location());
 //debugger;
         return true;
     }
@@ -132,11 +151,12 @@ debugger;
         state.funcs = {};
     }
 
-    function iskeywd(str)
+//add keywords to reservedMap{} rather than using separate rules:
+function iskeywd(str)
     {
         const keywds =
         {
-            #KEYWORDS#
+            #KEYWORDS# //this will be replaced by a list of keywords
         };
         return keywds[str.toUpperCase()];
     }
@@ -173,14 +193,18 @@ debugger;
 //first rule = start rule; redirect to real start:
 //allow bare stmts as well
 //start = WHITE_SPACE? (sql_script / seq_of_statements) EOF
-start: WHITE_SPACE { return DEBUG(0); }? sql_script { return results(); } ;
+new_start: WHITE_SPACE /*"DJTEST" { return DEBUG(0); }?*/ srcline WHITE_SPACE sql_script { return results(); } ;
+
+srcline: /*{ return DEBUG(0); }?*/ [@] file=[^:]+ ':' line=[0-9]+ ~[0-9] { init(`${file.join("")}:${line.join("")}`); return DEBUG(0); }
 
 //end of string token:
-TOKEND: ~[A-Za-z0-9$@_] WHITE_SPACE;
+TOKEND: ~[A-Za-z0-9$@_] WHITE_SPACE ;
 
 //optional white space:
 //TODO: required white space?
 WHITE_SPACE: [ \t\r\n]* ; //(NEWLINE / ' ')*
+
+dummy: 'a' | 'b' { return true; }?; //dummy rule to avoid "did not replace" warnings
 
 //eof
 

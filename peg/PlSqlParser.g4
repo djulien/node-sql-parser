@@ -113,8 +113,9 @@ alter_function
     ;
 
 //??added missing leading arg; seems to want at least one param? -DJ
+//make "create" optional -DJ
 create_function_body
-    : CREATE (OR REPLACE)? FUNCTION function_name ('(' (','? parameter)+ ')')?
+    : (CREATE (OR REPLACE)?)? FUNCTION function_name ('(' (','? parameter)+ ')')?
 //    : CREATE (OR REPLACE)? FUNCTION function_name ('(' parameter (',' parameter)* ')')?
       RETURN type_spec (invoker_rights_clause | parallel_enable_clause | result_cache_clause | DETERMINISTIC)*
       ((PIPELINED? (IS | AS) (DECLARE? seq_of_declare_specs? body | call_spec)) | (PIPELINED | AGGREGATE) USING implementation_type_name) ';'
@@ -215,8 +216,9 @@ procedure_body
       (DECLARE? seq_of_declare_specs? body | call_spec | EXTERNAL) ';'
     ;
 
+//make "create" optional -DJ
 create_procedure_body
-    : CREATE (OR REPLACE)? PROCEDURE procedure_name ('(' parameter (',' parameter)* ')')?
+    : (CREATE (OR REPLACE)?)? PROCEDURE procedure_name ('(' parameter (',' parameter)* ')')?
       invoker_rights_clause? (IS | AS)
       (DECLARE? seq_of_declare_specs? body | call_spec | EXTERNAL) ';'
     ;

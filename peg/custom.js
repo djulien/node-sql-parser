@@ -156,15 +156,22 @@ debugger;
     }
 
 //add keywords to reservedMap{} rather than using separate rules:
-function iskeywd(str)
+    function iskeywd(str)
     {
         const keywds =
         {
             #KEYWORDS# //this will be replaced by a list of keywords
         };
+        str = first(str);
         return keywds[str.toUpperCase()];
     }
 
+//return first prop of an obj:
+    function first(obj)
+    {
+        const keys = Object.keys(obj || {});
+        return keys.length? obj[keys[0]]: obj;
+    }
 /*
     function mkname(head, tail, shape)
     {
@@ -193,6 +200,20 @@ debugger;
 //    peg$parse.from = from;
 //    peg$parse.init = init;
 //    peg$parse.results = state;
+
+    function bind_var(bv, ibv, gep)
+    {
+        const retval = {bv};
+        if (ibv) retval.ibv = ibv[1];
+        const gepstr = gep.map((part) => part[1]).join(".");
+        if (gepstr) retval.gep = gepstr; //filter out nulls
+        return (ibv || gepstr)? {bind_var: retval}: bv;
+    }
+
+    function json_tidy(str)
+    {
+        return (str || "").replace(/(\{)"|(,)"|"(:)/g, "$1$2$3"); //kludge: peg parser wants a trailing "}" here
+    }
 
 //debugger;
 }

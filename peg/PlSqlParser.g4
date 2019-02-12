@@ -3314,8 +3314,8 @@ subquery_operation_part
 
 //fix ambiguous element list (too greedy) -DJ
 query_block
-//    : SELECT { return verb("select"); }? (DISTINCT | UNIQUE | ALL)? (ASTERISK | (','? selected_element)+) { return DEBUG(8); }?
-    : SELECT { return verb("select"); }? (DISTINCT | UNIQUE | ALL)? (ASTERISK | selected_element (',' selected_element)*) { return DEBUG(8); }?
+//    : SELECT { return verb("select"); }? (DISTINCT | UNIQUE | ALL)? (ASTERISK | (','? selected_element)+) //{ return DEBUG(8); }?
+    : SELECT { return verb("select"); }? (DISTINCT | UNIQUE | ALL)? (ASTERISK | selected_element (',' selected_element)*) //{ return DEBUG(8); }?
       into_clause? from_clause where_clause? hierarchical_query_clause? group_by_clause? model_clause?
     ;
 
@@ -3723,9 +3723,10 @@ expressions
     : expression (',' expression)*
     ;
 
+//debug -DJ
 expression
-    : cursor_expression
-    | logical_expression
+    : e=cursor_expression { console.error("curs expr", json_tidy(JSON.stringify(e))); return e; }
+    | e=logical_expression { console.error("log expr", json_tidy(JSON.stringify(e))); return e; }
     ;
 
 cursor_expression
@@ -3736,12 +3737,12 @@ cursor_expression
 //reorder to give AND/OR priority -DJ
 //refactor for more efficient parsing (avoid multiple model_expr eval) -DJ
 logical_expression
-    : /*logical_expression*/ multiset_expression 
-        ( AND logical_expression
-        | OR logical_expression
-        | IS NOT? (NULL_ | NAN | PRESENT | INFINITE | A_LETTER SET | EMPTY | OF TYPE? '(' ONLY? type_spec (',' type_spec)* ')')+
-        )?
-    | NOT logical_expression
+    : /*logical_expression*/ mse=multiset_expression 
+        more=( AND e=logical_expression { return {AND: e}}
+        | OR e=logical_expression { return {OR: e}}
+        | IS n=NOT? vals=(NULL_ | NAN | PRESENT | INFINITE | A_LETTER SET | EMPTY | OF TYPE? '(' ONLY? type_spec (',' type_spec)* ')')+ { return n? {ISNOT: vals}: {IS: vals}}
+        )? { return more? {mse, more}: mse}
+    | NOT e=logical_expression { return {NOT: e}; }
     ;
 SLOWER_logical_expression
     : /*logical_expression*/ multiset_expression AND logical_expression
@@ -4186,7 +4187,7 @@ schema_name
     ;
 
 routine_name
-    : /*{ return DEBUG(3); }?*/ head=identifier tail=('.' id_expression)* ('@' link_name)? { return funcref(head + tail.map((parts) => parts[1]).join(".")); }?;
+    : /*{ return DEBUG(3); }?*/ first=identifier more=('.' id_expression)* ('@' link_name)? { return funcref(first + more.map((parts) => parts[1]).join(".")); }?;
     ;
 
 package_name
@@ -4290,11 +4291,11 @@ link_name
     ;
 
 column_name
-    : head=identifier tail=('.' id_expression)* { return colref(head + tail.map((part) => part[1]).join(".")); }?
+    : first=identifier more=('.' id_expression)* { return colref(first + more.map((part) => part[1]).join(".")); }?
     ;
 
 tableview_name
-    : head=identifier tail=('.' id_expression)? { return tblref(head + (tail || []).join("")); }?
+    : first=identifier more=('.' id_expression)? { return tblref(first + (more || []).join("")); }?
       ('@' link_name | /*TODO{!(input.LA(2) == BY)}?*/ partition_extension_clause)?
     ;
 
@@ -4447,11 +4448,14 @@ native_datatype_element
     | MLSLABEL
     ;
 
+//BINDVAR already has ":INT" in it, don't need it here -DJ
 bind_variable
-    : (BINDVAR | ':' UNSIGNED_INTEGER)
+//    : (BINDVAR | [:] UNSIGNED_INTEGER)
+    : bv=BINDVAR
       // Pro*C/C++ indicator variables
-      (INDICATOR? (BINDVAR | ':' UNSIGNED_INTEGER))?
-      ('.' general_element_part)*
+//      (INDICATOR? (BINDVAR | [:] UNSIGNED_INTEGER))?
+      ibv=(INDICATOR? BINDVAR)?
+      gep=('.' general_element_part)* { return bind_var(bv, ibv, gep); } //{bind_var: first(bv) + (ibv? ` ${ibv[1]} `: " ") + gep.map((part) => part[1]).join(".")}; }
     ;
 
 general_element

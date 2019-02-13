@@ -162,12 +162,12 @@ debugger;
         {
             #KEYWORDS# //this will be replaced by a list of keywords
         };
-        str = first(str);
+        str = key(str);
         return keywds[str.toUpperCase()];
     }
 
 //return first prop of an obj:
-    function first(obj)
+    function key(obj)
     {
         const keys = Object.keys(obj || {});
         return keys.length? obj[keys[0]]: obj;

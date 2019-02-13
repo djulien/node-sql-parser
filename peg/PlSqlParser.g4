@@ -4187,7 +4187,7 @@ schema_name
     ;
 
 routine_name
-    : /*{ return DEBUG(3); }?*/ first=identifier more=('.' id_expression)* ('@' link_name)? { return funcref(first + more.map((parts) => parts[1]).join(".")); }?;
+    : /*{ return DEBUG(3); }?*/ first=identifier more=('.' id_expression)* ('@' link_name)? { return funcref(key(first) + more.map((parts) => key(parts[1+1])).join(".")); }?;
     ;
 
 package_name
@@ -4291,11 +4291,11 @@ link_name
     ;
 
 column_name
-    : first=identifier more=('.' id_expression)* { return colref(first + more.map((part) => part[1]).join(".")); }?
+    : first=identifier more=('.' id=id_expression { return id; })* { more.unshift(first); const colname = {column_name: more.map((part) => key(part)).join(".")}; colref(colname); return colname; }
     ;
 
 tableview_name
-    : first=identifier more=('.' id_expression)? { return tblref(first + (more || []).join("")); }?
+    : first=identifier more=('.' id=id_expression { return id; })? { const tvname = {tblvw_name: [first, more || {}].map((part) => key(part)).join(".")}; return tblref(tblvw_name); }?
       ('@' link_name | /*TODO{!(input.LA(2) == BY)}?*/ partition_extension_clause)?
     ;
 

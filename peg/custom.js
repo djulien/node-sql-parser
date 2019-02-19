@@ -224,7 +224,7 @@ debugger;
 //start = WHITE_SPACE? (sql_script / seq_of_statements) EOF
 new_start: WHITE_SPACE /*"DJTEST" { return DEBUG(0); }?*/ srcline WHITE_SPACE sql_script { return results(); } ;
 
-srcline: /*{ return DEBUG(0); }?*/ [@] file=[^:]+ ':' line=[0-9]+ ~[0-9] { init(`${file.join("")}:${line.join("")}`); return DEBUG(0); }
+srcline: /*{ return DEBUG(0); }?*/ [@] file=[^:]+ ':' line=[0-9]+ ~[0-9] { init(`${file.join("")}:${line.join("")}`); return DEBUG(0); } ;
 
 //end of string token:
 TOKEND: ~[A-Za-z0-9$@_] WHITE_SPACE ;

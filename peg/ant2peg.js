@@ -54,7 +54,7 @@ for (;;)
 //src = src.replace_log(/=/g, ":");
 //src = src.replace_log(/\('\+'\|'-'\)/gm, "( '+' | '-' )");
 //src = src.replace_log(/'[:=]'|\[[:=]\]|(:)|(=)/g, (match, colon, equal) => colon? "=": equal? ":": match);
-if (true)
+if (false)
 {
     src = src.replace(/\}:/g, "#KLUDGE1#").replace(/=>/g, "#KLUDGE2#");
     src = src.replace_log(exclre(/(:)|(=)/g), (as_is, colon, equal) => colon? "=": equal? ":": as_is); //swap "="/":"; exclude strings/sets and ternary op
@@ -63,6 +63,7 @@ if (true)
     src = src.replace_log(exclre(/(~)/g), (as_is, tilda) => tilda? "!": as_is); // /([^'])~/gm, "$1 !");
     src = src.replace_log(exclre(/(;\s*?)$/gm), (as_is, semi) => semi? ` //${semi}`: as_is); // /(;\s*)$/gm, " //$1");
 //NO: src = src.replace_log(exclre(/./g), (match) => match.replace(/^\{.*\}$/, `&${match}`)); // }) /(.)\{/g, (match) => (match[0] != "'")? `${match[0]} &{`: match);
+    src = src.replace_log(exclre(/(.)(\{[^}]+\})\?/g), (as_is, prefix, pred) => pred? `${prefix.replace(/([^!~])/, "$1&")}${pred}`: as_is); //CAUTION: only inject "&" for conditional predicates, not retvals; drop trailing "?"
 }
 else //broken
 {
@@ -71,8 +72,25 @@ else //broken
     src = src.replace_unn_log(/\|/g, "/", delims); //  /([^'])\|/gm, "$1 / "); //(match) => match.replace(/\|/, "/"));
     src = src.replace_unn_log(/~/g, "!", delims); // /([^'])~/gm, "$1 !");
     src = src.replace_unn_log(/(;\s*?)$/gm, " //$1", delims); // /(;\s*)$/gm, " //$1");
+//only inject "&" for conditional predicates, not retvals; drop trailing "?":
+let svsrc = src;
+    let insofs = [];
+//    if (src.indexOf("{") != -1) debugger;
+    src = src.replace_unn_log(/(.)/g, (ch) =>
+    {
+        if (ch.input[ch.index + 1] == "{") insofs.push(ch.index);
+        if (ch.input[ch.index - 1] == "}") { if (ch[0] == "?") return ""; insofs.pop(); }
+        return ch[0];
+    }, delims);
+    while (insofs.length)
+    {
+        if (src[insofs.top] != "!") src = src.slice(0, insofs.top + 1) + "&" + src.slice(insofs.top + 1);
+        insofs.pop();
+    }
+//if (src != svsrc)
+for (let i = 0; i < src.length; ++i)
+    if (src[i] != svsrc[i]) { console.error(`diff at line ${numlines(src.slice(0, i))}: ${highlight(src, i, 20)}`); break; }
 }
-src = src.replace_log(exclre(/(.)(\{[^}]+\})\?/g), (as_is, prefix, pred) => pred? `${prefix.replace(/([^!~])/, "$1&")}${pred}`: as_is); //CAUTION: only inject "&" for conditional predicates, not retvals; drop trailing "?"
 src = src.replace_log(/('[^'\n]*?[a-z0-9@$_]')(\??)|('[^'\n]*?')(\??)|"[^"\n]*?"|\[[^\]\n]*?\]/gmi, (match, squo_alpha, squo_alpha_optnl, squo_other, squo_other_optnl) => squo_alpha? `${squo_alpha}i${squo_alpha_optnl || ""} TOKEND`: squo_other? `${squo_other}i${squo_other_optnl || ""} WHITE_SPACE`: match); //make keywords case insensitive, also allow trailing whitespace (only for single-quoted strings)
 
 //TODO: not sure what to do with these:
@@ -143,7 +161,7 @@ function replace_unnested(str, re, cb, delims)
 debugger;
         const match = delim_re.exec(str); //must use exec() to get match index :(
         if (!match) break;
-        const [char, caller_match] = match;
+        const [char, caller_match] = [match[0], match.slice(1)];
         const is_escd = (prev.char == Esc) && (match.index == prev.chofs + 1);
         const begin_type = (!is_escd && !caller_match)? NestBegin.indexOf(char): -1;
         const end_type = (!is_escd && !caller_match)? NestEnd.indexOf(char): -1;
@@ -155,10 +173,13 @@ debugger;
 //    nesting.depth = (nesting.stack || []).length;
         prev.char = !is_escd? char: ""; prev.chofs = match.index; //double esc char == unescaped
 //        if (++count > 20) throw "inf loop?".red;
-        if (!caller_match || stack.length) continue;
+console.error(`char '${char}', caller match len ${(caller_match || []).length}, index ${match.index} ${highlight(str, match.index, 10)} @${__line}`);
+        if (!(caller_match || []).length || stack.length) continue;
+        caller_match.index = match.index;
+        caller_match.input = match.input;
         retstr += str.slice(prev.index || 0, match.index) + cb_func(caller_match);
 //console.error(retstr.yellow_lt);
-        prev.index = match.index + caller_match.length;
+        prev.index = match.index + caller_match[0].length;
         if (!repl_all) break;
     }
     if (stack.length) unmatched(stack.top.type, stack.top.index); //throw `unmatched '${NestBegin[stack.top.type]}' at ofs ${stack.top.index}: ${str.slice(Math.max(stack.top.index - 10, 0), stack.top.index)}${str.slice(stack.top.index, stack.top.index + 1).yellow_lt}${str.slice(stack.top.index + 1, stack.top.index + 10).red_lt}`.red_lt;
@@ -168,6 +189,12 @@ debugger;
     {
         console.error(`unmatched '${NestBegin[type]}' at ofs ${ofs}: ${str.slice(Math.max(ofs - 30, 0), ofs)}${str.slice(ofs, ofs + 1).red_lt}${str.slice(ofs + 1, ofs + 10).yellow_lt}`.yellow_lt);
     }
+}
+
+//make it easier to see where error is:
+function highlight(str, ofs, len)
+{
+    return `${str.slice(Math.max(ofs - len, 0), Math.max(ofs - 1, 0)).blue}${str.slice(Math.max(ofs -1, 0), ofs + 1).red}${str.slice(ofs + 1, ofs + len).blue}`.replace(/\n/g, "\\n");
 }
 
 function dedupe(str)

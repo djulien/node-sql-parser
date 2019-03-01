@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "colors": "git+https://github.com/djulien/colors.js.git",
-    "magic-globals": "^0.9.1"
+    "magic-globals": "git+https://github.com/djulien/magic-globals.git"
   },
   "devDependencies": {
     "pegjs": "=0.10.0",

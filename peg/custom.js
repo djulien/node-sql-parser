@@ -71,10 +71,11 @@ debugger;
     function my_location()
     {
         const info = location(); //peg start/end info
-        return {ofs: info.start.offset, line: info.start.line, col: info.start.column}; //abreviated info
+//        return {ofs: info.start.offset, line: info.start.line, col: info.start.column}; //abreviated info
+        return `${info.start.offset}@${info.start.line}.${info.start.column}`; //more abreviated info
     }
 
-    const state = {};
+    const state = []; //{};
 //    {
 //        verbs: [], //stack
 //        tbls: {},
@@ -91,40 +92,64 @@ debugger;
 //        return true;
 //    }
 
-    function colref(name)
-    {
-        (state.cols[name] || (state.cols[name] = [])).push(my_location());
+    function colref(name) { return addref("col_refs", name_obj); }
+//    {
+//        (state.top.cols[name] || (state.top.cols[name] = [])).push(my_location());
 //debugger;
-        return true;
-    }
+//        return true;
+//    }
 
-    function tblref(name)
-    {
-        (state.tbls[name] || (state.tbls[name] = [])).push(my_location());
+    function tblref(name_obj) { return addref("tbl_refs", name_obj); }
+//    {
+//console.error(`tblref @${__line}`, JSON.stringify(name));
+//process.exit();
+//        (state.top.tbls[key(name_obj)] || (state.top.tbls[key(name_obj)] = [])).push(my_location());
 //debugger;
-        return true;
-    }
+//        return name_obj; //true;
+//    }
 
-    function funcref(name)
-    {
-        (state.func_refs[name] || (state.func_refs[name] = [])).push(my_location());
+    function funcref(name_obj) { return addref("func_refs", name_obj); }
+//    {
+//        (state.top.func_refs[key(name_obj)] || (state.top.func_refs[key(name_obj)] = [])).push(my_location());
 //debugger;
-        return true;
-    }
+//        return name_obj; //true;
+//    }
 
-    function funcdef(name)
-    {
-        (state.func_defs[name] || (state.func_defs[name] = [])).push(my_location());
+    function funcdef(name_obj) { return addref("func_defs", name_obj); }
+//    {
+//        (state.top.func_defs[key(name_obj)] || (state.top.func_defs[key(name_obj)] = [])).push(my_location());
 //debugger;
-        return true;
-    }
+//        return name_obj; //true;
+//    }
 
-    function verb(name)
-    {
+    function verb(name_obj) { return addref("verbs", name_obj); }
+//    {
 //        if (!name) state.verb.pop();
 //        else state.verb.push(name);
-        (state.verbs[name] || (state.verbs[name] = [])).push(my_location());
+//        (state.verbs[key(name_obj)] || (state.verbs[key(name_obj)] = [])).push(my_location());
 //debugger;
+//        return name_obj; //true;
+//    }
+
+
+    function addref(type, name_obj)
+    {
+//        (state.top[type][key(name_obj)] || (state.top[type][key(name_obj)] = [])).push(my_location());
+        (state.top[type] || (state.top[type] = [])).push(Object.assign(name_obj, {loc: my_location()}));
+//debugger;
+        return name_obj; //true;
+    }
+
+//parse results check-point:
+//set chkpt before first branch, restore chkpt after failed branches
+    function CHKPT(chkpt)
+    {
+        if (!chkpt) return state.push_fluent({}).length; //++CHKPT.seq || (CHKPT.seq = 1); //new (nested) chkpt (must be non-0)
+//restore (back-track:
+//forget any parse results since chkpt
+//        parse_results.push(state_name);
+//        saved_state[state_name] = results.seq++;
+        state.splice(chkpt - 1).forEach((depth, inx) => console.error(`chkpt[${inx}]: dropping ${JSON.stringify(depth, null, 2)}`));
         return true;
     }
 
@@ -146,13 +171,14 @@ debugger;
     {
         state.srcline = srcline;
         Object.defineProperty(state, "started", {value: Date.now(), writable: true}); //!enum
-        state.verbs = [];
-        state.tbls = {};
-        state.cols = {};
-        state.func_defs = {};
-        state.func_refs = {};
+//        state.verbs = [];
+//        state.tbls = {};
+//        state.cols = {};
+//        state.func_defs = {};
+//        state.func_refs = {};
 //        var_defs: {},
 //        var_refs: {},
+        return CHKPT(); //create initial stack frame
     }
 
 //add keywords to reservedMap{} rather than using separate rules:
@@ -167,6 +193,7 @@ debugger;
     }
 
 //return first prop of an obj:
+//first prop name is used as object "type" without needing extra prototypes
     function key(obj)
     {
         const keys = Object.keys(obj || {});
@@ -189,12 +216,14 @@ debugger;
 
     function commas(num) { return num.toLocaleString(); } //grouping (1000s) default = true
 
+//return parsed results:
     function results()
     {
         state.elapsed = `${commas(Date.now() - state.started)} msec`;
-        state.started = null;
-        inspect(state); //TODO: return this to caller
-        return true;
+//        state.started = null;
+//console.error("results".cyan);
+//        inspect(state); //TODO: return this to caller
+        return state; //true;
     }
 //kludge: hang extra functions/data off parse() so they will also be exported
 //    peg$parse.from = from;
@@ -210,10 +239,10 @@ debugger;
         return (ibv || gepstr)? {bind_var: retval}: bv;
     }
 
-    function json_tidy(str)
-    {
-        return (str || "").replace(/(\{)"|(,)"|"(:)/g, "$1$2$3"); //kludge: peg parser wants a trailing "}" here
-    }
+//    function json_tidy(str)
+//    {
+//        return (str || "").replace(/(\{)"|(,)"|"(:)|#PEG-KLUDGE#\}/g, "$1$2$3"); //kludge: peg parser wants matched "}" here
+//    }
 
 //debugger;
 }
@@ -222,18 +251,22 @@ debugger;
 //first rule = start rule; redirect to real start:
 //allow bare stmts as well
 //start = WHITE_SPACE? (sql_script / seq_of_statements) EOF
-new_start: WHITE_SPACE /*"DJTEST" { return DEBUG(0); }?*/ srcline WHITE_SPACE sql_script { return results(); } ;
+new_start: WHITE_SPACE /*"DJTEST" { return DEBUG(0); }?*/ srcline WHITE_SPACE sql_script { return results(); };
 
-srcline: /*{ return DEBUG(0); }?*/ [@] file=[^:]+ ':' line=[0-9]+ ~[0-9] { init(`${file.join("")}:${line.join("")}`); return DEBUG(0); } ;
+srcline: /*{ return DEBUG(0); }?*/ [@] file=[^:]+ ':' line=[0-9]+ ~[0-9] { init(`${file.join("")}:${line.join("")}`); return DEBUG(0); };
 
 //end of string token:
-TOKEND: ~[A-Za-z0-9$@_] WHITE_SPACE ;
+TOKEND: ~[A-Za-z0-9$@_] WHITE_SPACE;
 
 //optional white space:
 //TODO: required white space?
-WHITE_SPACE: [ \t\r\n]* ; //(NEWLINE / ' ')*
+WHITE_SPACE: [ \t\r\n]*; //(NEWLINE / ' ')*
 
-dummy: 'a' | 'b' { return true; }?; //dummy rule to avoid "did not replace" warnings
+//save parse state at start of conditional branch:
+//failed branches will restore back to chkpt
+CHKPT: "" { return CHKPT(); };
+
+dummy: 'a' | 'b' { return true; }? 'c'; //dummy rule to avoid "did not replace" warnings
 
 //eof
 

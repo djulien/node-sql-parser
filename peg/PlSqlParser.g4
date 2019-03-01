@@ -3314,8 +3314,8 @@ subquery_operation_part
 
 //fix ambiguous element list (too greedy) -DJ
 query_block
-//    : SELECT { return verb("select"); }? (DISTINCT | UNIQUE | ALL)? (ASTERISK | (','? selected_element)+) //{ return DEBUG(8); }?
-    : SELECT { return verb("select"); }? (DISTINCT | UNIQUE | ALL)? (ASTERISK | selected_element (',' selected_element)*) //{ return DEBUG(8); }?
+//    : SELECT { return verb({verb: "select"}); }? (DISTINCT | UNIQUE | ALL)? (ASTERISK | (','? selected_element)+) //{ return DEBUG(8); }?
+    : SELECT { return verb({verb: "select"}); }? (DISTINCT | UNIQUE | ALL)? (ASTERISK | selected_element (',' selected_element)*) //{ return DEBUG(8); }?
       into_clause? from_clause where_clause? hierarchical_query_clause? group_by_clause? model_clause?
     ;
 
@@ -3560,7 +3560,7 @@ for_update_options
     ;
 
 update_statement
-    : UPDATE { return verb("update"); }? general_table_ref update_set_clause where_clause? static_returning_clause? error_logging_clause?
+    : UPDATE { return verb({verb: "update"}); }? general_table_ref update_set_clause where_clause? static_returning_clause? error_logging_clause?
     ;
 
 // Update Specific Clauses
@@ -3576,11 +3576,11 @@ column_based_update_set_clause
     ;
 
 delete_statement
-    : DELETE { return verb("delete"); }? FROM? general_table_ref where_clause? static_returning_clause? error_logging_clause?
+    : DELETE { return verb({verb: "delete"}); }? FROM? general_table_ref where_clause? static_returning_clause? error_logging_clause?
     ;
 
 insert_statement
-    : INSERT { return verb("insert"); }? (single_table_insert | multi_table_insert)
+    : INSERT { return verb({verb: "insert"}); }? (single_table_insert | multi_table_insert)
     ;
 
 // Insert Specific Clauses
@@ -3725,8 +3725,8 @@ expressions
 
 //debug -DJ
 expression
-    : e=cursor_expression { console.error("curs expr", json_tidy(JSON.stringify(e))); return e; }
-    | e=logical_expression { console.error("log expr", json_tidy(JSON.stringify(e))); return e; }
+    : e=cursor_expression { /*console.error("curs expr", json_tidy(JSON.stringify(e)))*/; return e; }
+    | e=logical_expression { /*console.error("log expr", json_tidy(JSON.stringify(e)))*/; return e; }
     ;
 
 cursor_expression
@@ -3740,7 +3740,7 @@ logical_expression
     : /*logical_expression*/ mse=multiset_expression 
         more=( AND e=logical_expression { return {AND: e}}
         | OR e=logical_expression { return {OR: e}}
-        | IS n=NOT? vals=(NULL_ | NAN | PRESENT | INFINITE | A_LETTER SET | EMPTY | OF TYPE? '(' ONLY? type_spec (',' type_spec)* ')')+ { return n? {ISNOT: vals}: {IS: vals}}
+        | IS n=NOT? val=(NULL_ | NAN | PRESENT | INFINITE | A_LETTER SET | EMPTY | OF TYPE? '(' ONLY? type_spec (',' type_spec)* ')')+ { return n? {ISNOT: val}: {IS: val}}
         )? { return more? {mse, more}: mse}
     | NOT e=logical_expression { return {NOT: e}; }
     ;
@@ -4135,12 +4135,12 @@ partition_extension_clause
     ;
 
 column_alias
-    : AS? (identifier | quoted_string)
+    : AS? (identifier_kywdok | quoted_string)
     | AS
     ;
 
 table_alias
-    : identifier
+    : identifier_kywdok
     | quoted_string
     ;
 
@@ -4187,7 +4187,7 @@ schema_name
     ;
 
 routine_name
-    : /*{ return DEBUG(3); }?*/ first=identifier more=('.' id_expression)* ('@' link_name)? { return funcref(key(first) + more.map((parts) => key(parts[1+1])).join(".")); }?;
+    : /*{ return DEBUG(3); }?*/ first=identifier more=('.' id_expression)* ('@' link_name)? { return funcref(key(first) + more.map((parts) => key(parts[1+1])).join(".")); }?
     ;
 
 package_name
@@ -4295,7 +4295,7 @@ column_name
     ;
 
 tableview_name
-    : first=identifier more=('.' id=id_expression { return id; })? { const tvname = {tblvw_name: [first, more || {}].map((part) => key(part)).join(".")}; return tblref(tblvw_name); }?
+    : first=identifier more=('.' id=id_expression { return id; })? { const tvname = {tblvw_name: [first, more || {}].map((part) => key(part)).join(".")}; return tblref(tvname); }?
       ('@' link_name | /*TODO{!(input.LA(2) == BY)}?*/ partition_extension_clause)?
     ;
 
@@ -4634,6 +4634,13 @@ identifier
     : (INTRODUCER char_set_name)? id=id_expression ~{ return iskeywd(id); }? { return id; }
     ;
 
+//allow keywords (relax alias names) -DJ
+//NO WORKY: makes other keywords ambiguous ("from" alias)
+identifier_kywdok
+//no worky    : (INTRODUCER char_set_name)? id=id_expression /*~{ return iskeywd(id); }?*/ { return id; }
+    : identifier
+    ;
+
 id_expression
     : regular_id
     | DELIMITED_ID
@@ -4648,7 +4655,7 @@ regular_id
 //    : non_reserved_keywords_pre12c
 //    | non_reserved_keywords_in_12c
     : REGULAR_ID
-    | A_LETTER
+//    | A_LETTER //causes ambiguity with table alias "a"
 //    | AGENT
     | AGGREGATE
 //    | ANALYZE

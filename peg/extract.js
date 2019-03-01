@@ -7,7 +7,8 @@ require("magic-globals"); //__file, __line, __stack, __func, etc
 require("colors").enabled = true; //for console output; https://github.com/Marak/colors.js/issues/127
 const fs = require('fs');
 const pathlib = require('path');
-const {numkeys, numlines, commas, dedupe, pct, extensions, highlight, warn, error} = require("./ant2peg"); //share code + extensions
+const {numkeys, numlines, commas, plural, dedupe, pct, extensions, highlight, rg, warn, error, entries} = require("./ant2peg"); //share code + extensions
+//replace_unnested.nowarn = true;
 
 //extensions(); //hoist
 
@@ -17,7 +18,6 @@ const TEXT_RULER = "124679".split("").reduce((str, col) => str.padEnd(col * 10, 
 
 //build list of available named blocks:
 const blocks = {};
-let num_chkpt = 0;
 const START = "sql_script";
 const SYMBOL = /([a-z$@_][a-z0-9$@_]*)/gi; //symbol name can have "$@_"; don't use "\w"; captured
 if (process.argv.length < 3) { console.error(`usage: ${pathlib.basename(process.argv[1])} <ant-file>`.red); process.exit(1); }
@@ -31,6 +31,7 @@ process.argv.slice(2).forEach((fname) =>
     console.error(`processing '${bname}' ...`.cyan);
     let src = fs.readFileSync(fname).toString();
     const sv_src = src, sv_numblks = numkeys(blocks);
+    const num_chkpt = {};
 
     src = src.replace(/\/\*(.|\r|\n)*?\*\//gm, (match) => match.replace(/[^\n]/g, "")); // "//" + match.replace(/\n/g, "\n//")); //strip multi-line comments, preserve line#s
 if (numlines(src) != numlines(sv_src)) throw 'lost lines @1'.red;
@@ -44,7 +45,7 @@ if (numlines(src) != numlines(sv_src)) throw 'lost lines @4'.red;
     const                                            NAME = 1,                     GROUPING = 3+1;
     const lines = src.split(new RegExp(`^([^\\S\\n]*${SYMBOL.source}(\\s|\\r|\\n)*:)`, dedupe("gmi" + SYMBOL.flags))); //CAUTION: doesn't match if "//" between name + ":"
 //for (let i = 1; i < 10; ++i) console.error(`line[${i}]`, (lines[i] || "NONE").slice(0, 30));
-    let line_num = numlines(lines.shift());
+    let line_num = numlines(lines.shift()), max_chkpt;
     lines.forEach((blk, inx, all) =>
     {
 //    if (inx > 7) return;
@@ -64,24 +65,26 @@ if (sname.match(/[^a-z0-9$@_]/i)) error(`symbol parser bad: '${sname.slice(0, 30
 //    | { return CHKPT(chkpt); }?
 //    )
         if ((sname == "@lexer") || (sname == "@parser")) return; //skip hdr stuff
-        let branches = [], keep = [];
+        const branches = [], keep = [];
 //if (sname == "routine_name") console.error(TEXT_RULER, blk_txt.escall);
+const DEBUG = false; //(sname == "BINDVAR") || (sname == "APPROXIMATE_NUM_LIT");
+if (DEBUG) { console.error(TEXT_RULER); console.error(blk_txt.escall); }
         blk_txt.replace_unnested(/[:;|()]/g, (ch) =>
         {
 //            inner(ch);
 //            if (sname == "routine_name") console.error(ch.index, JSON.stringify(ch), JSON.stringify(branches));
 //        function inner(ch)
 //        {
-            if (ch[0] == "|") { branches.top.br.push(ch.index); return; } //start of alt branch
-            if ((ch[0] == ":") || (ch[0] == "(")) { branches.push({stofs: ch.index, br: []}); return; } //start outer/inner branch
+            if (ch[0] == "|") return branches.top.push(ch.index + 1); //start of alt branch
+            if ((ch[0] == ":") || (ch[0] == "(")) return branches.push([ch.index + 1]); //start outer/inner branch
             if ((ch[0] == ";") || (ch[0] == ")")) //end outer/inner branch
             {
                 const finished_branch = branches.pop();
                 if (!finished_branch) //branches.length)
-                    ((ch[0] == ")")? error: warn)(`rule '${sname}' underflow at char ofs ${ch.index}: ${highlight(blk_txt, ch.index, 20)}`); //NOTE: okay for ";" to underflow (could have extras)
+                    return ((ch[0] == ")")? error: warn)(`rule '${sname}' underflow at char ofs ${ch.index}: ${highlight(blk_txt, ch.index, 20)}`); //NOTE: okay for ";" to underflow (could have extras)
 //                if (!branches.top.br.length) { branches.pop(); return; } //don't need to adjust this one
-                if (!((finished_branch || {}).br || []).length) return; //don't need to add chkpts
-                finished_branch.enofs = ch.index;
+                if (finished_branch.length < 1+1) return; //no branches; don't need to add chkpts
+                finished_branch.push(ch.index);
                 keep.push(finished_branch); //branches.pop());
                 return;
             }
@@ -91,20 +94,40 @@ if (sname.match(/[^a-z0-9$@_]/i)) error(`symbol parser bad: '${sname.slice(0, 30
         });
         if (branches.length) error(`rule '${sname}' bad branch nesting`);
         if (!keep.length) return;
+if (DEBUG) console.error(JSON.stringify(keep));
 //        console.error(`rule '${sname}' has ${keep.length} branches to adjust`);
-        keep.forEachRev((chkpt) =>
+        let new_txt = blk_txt;
+        keep.forEach((chkpt, inx) => //NOTE: keep[] is in reserve order (inner-most first)
         {
-            blk_txt = blk_txt.slice(0, chkpt.enofs) + ")" + blk_txt.slice(chkpt.enofs);
-            chkpt.br.forEachRev((ofs) => blk_txt = blk_txt.slice(0, ofs) + " { return CHKPT(chkpt); }? " + blk_txt.slice(ofs));
-            blk_txt = blk_txt.slice(0, chkpt.stofs) + " chkpt=CHKPT ( " + blk_txt.slice(chkpt.stofs);
+            const svlen = new_txt.length;
+            chkpt.forEachRev((ofs, brinx, brall) =>
+            {
+//use unique chkpt names to avoid possible incorrect values (not sure how peg nesting works):
+                if (!brinx) new_txt = new_txt.splice(ofs, 0, `chkpt${keep.length - inx}=CHKPT chkval=(`);
+                else if (brinx == brall.length - 1) new_txt = new_txt.splice(ofs, 0, ") { return chkval; }");
+                else new_txt = new_txt.splice(ofs, 0, `{ return CHKPT(chkpt${keep.length - inx}); }?`);
+            });
+            keep.slice(inx + 1).forEach((other) => //update offsets of other chkpt branches
+            {
+                other.forEach((ofs, inx) => { if (ofs > chkpt.top) other[inx] += new_txt.length - svlen; });
+            });
         });
-        blocks[sname].blk_txt = blk_txt;
-        ++num_chkpt;
+        if (new_txt == blk_txt) error(`block '${sname}' text didn't change after ${plural(keep.length)} chkpt${plural.suffix}`);
+if (DEBUG) console.error(new_txt.escall);
+        blocks[sname].text = new_txt; //blk_txt;
+        if (!num_chkpt[keep.length] && (keep.length > 1)) max_chkpt = `${sname} with ${keep.length}`;
+        ++num_chkpt[keep.length] || (num_chkpt[keep.length] = 1);
     });
 //console.log(`//${bname} top`);
 //console.log(src);
 //console.log(`//${bname} eof`);
-console.error(`${bname} ${commas(numlines(sv_src))} => ${commas(numlines(src))} lines (${pct(numlines(src) / numlines(sv_src))}), ${commas(sv_src.length)} => ${commas(src.length)} chars (${pct(src.length / sv_src.length)}), ${commas(numkeys(blocks) - sv_numblks)} blocks (${pct(num_chkpt / (numkeys(blocks) - sv_numblks))} chkpt)`[(numlines(sv_src) == numlines(src))? "green": "red"]);
+//console.error(JSON.stringify(entries(num_chkpt)));
+    Object.defineProperty(num_chkpt, "total", {value: Object.values(num_chkpt).reduce((total, count) => +count + total, 0)}); //!enum
+    console.error(rg(`${bname} ${commas(numlines(sv_src))} => ${commas(numlines(src))} lines (${pct(numlines(src) / numlines(sv_src))}), ${commas(sv_src.length)} => ${commas(src.length)} chars (${pct(src.length / sv_src.length)})`, numlines(sv_src) == numlines(src)));
+    console.error(`${commas(numkeys(blocks) - sv_numblks)} blocks, ${commas(plural(num_chkpt.total))} ${Object.keys(num_chkpt).join("/")}-chkpt${plural.suffix} (${pct(num_chkpt.total / (numkeys(blocks) - sv_numblks))})`.cyan);
+    if (numkeys(num_chkpt) < 2) return;
+    console.error(`#rule chkpts: ${entries(num_chkpt).map(([depth, count]) => `${depth}: ${count}`).join(", ")}`.cyan); //entries(num_chkpt).forEach(([depth, count]) => console.error(`${depth}-chkpt${plural(count), plural.suffix}: ${count}`));
+    if (max_chkpt) console.error(`max: ${max_chkpt}`.cyan);
 });
 
 
@@ -152,7 +175,7 @@ if (want_debug) console.error(`rule '${name.cyan}' from ${blocks[name].srcline} 
 if (want_debug) debugger;
     blocks[name].text
         .replace(new RegExp(`${SYMBOL.source}\\s*=`, "gmi"), "") //strip var captures
-        .replace_unnested(SYMBOL, (parts) =>
+        .replace_unnested(SYMBOL, (parts) => //use unnested repl to find child rule refs
         {
 //            if (parts[1] == name) return; //skip self; redundant - check below will catch this
 if (want_debug) debugger;

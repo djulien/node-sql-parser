@@ -9,6 +9,7 @@ const pathlib = require('path');
 const util = require("util");
 const fs = require('fs');
 
+
 extensions(); //hoist
 
 const NEW = true; //newer grammar (pre-filtered)
@@ -104,6 +105,7 @@ for (;;)
     };
     const parts = keywd_re.exec(src);
     if (!parts) break;
+//    if (parts[NAME] != parts[VAL1] || parts[VAL2]) console.error(`not sure if ${parts[NAME]} is a keyword in line ${numlines(src.slice(0, parts.index))}`.yellow);
     if (Hardcoded[parts[NAME]] === false) continue; //not a keywd
     if (parts[NAME] != parts[VAL1] || parts[VAL2])
     {
@@ -133,7 +135,7 @@ if (false)
 //NO: src = src.replace_log(exclre(/./g), (match) => match.replace(/^\{.*\}$/, `&${match}`)); // }) /(.)\{/g, (match) => (match[0] != "'")? `${match[0]} &{`: match);
     src = src.replace_log(exclre(/(.)(\{[^}]+\})\?/g), (as_is, prefix, pred) => pred? `${prefix.replace(/([^!~])/, "$1&")}${pred}`: as_is); //CAUTION: only inject "&" for conditional predicates, not retvals; drop trailing "?"
 }
-else //broken
+else //not broken
 {
     const delims = /""|''|``|\{\}|\[\]/; //exclude substr that have special meaning
     src = src.replace_unn_log(/[:=]/g, (match) => (match[0] == "=")? ":": "=", delims); //swap =/:; exclude strings/sets
@@ -222,9 +224,18 @@ function unit_test()
     process.exit();
 }
 
+function pred_fixup(str) //, delims)
+{
+//broken    return str.replace_unn_log(/([^!~])(?=\{)/g, "$1&", delims).replace_unn_log(/\?/g, (match) => (match.input[match.index - 1] == "}")? "&": match, delims); //CAUTION: only inject "&" for conditional predicates, not retvals; drop trailing "?"
+//    return str.replace_unn_log(/[^!~\n]/g, (match) => (match.input[match.index + 1] == "{")? match[0] + "&": match[0], delims).replace_unn_log(/\?/g, (match) => (match.input[match.index - 1] == "}")? "&": match[0], delims); //CAUTION: only inject "&" for conditional predicates, not retvals; drop trailing "?"
+    return str.replace_unn_log(/[^!~\n]/g, (match) => (match.input[match.index + 1] == "{")? match[0] + "&": match[0]).replace_unn_log(/\?/g, (match) => (match.input[match.index - 1] == "}")? "&": match[0]); //CAUTION: only inject "&" for conditional predicates, not retvals; drop trailing "?"
+}
+
+
 //regex replace only when not nested within delim pairs:
 function replace_unnested(str, re, cb, delims)
 {
+//    if (!delims) delims = /""|''|``|\{\}/;
 //    delims = delims.source.split("|");
     if (delims && (delims.source != "\"\"|''|``|\\{\\}|\\[\\]")) throw `/${delims.source}/ not implemented`.red;
     const NestBegin = "\"'`{["; //delims.reduce((list, char) => list + char, "");
@@ -321,9 +332,21 @@ function json_tidy(str)
     return (str || "").replace(/(\{)"|(,)"|"(:)/g, "$1$2$3"); //|#PEG-KLUDGE#\}/g, "$1$2$3"); //kludge: peg parser wants matched "}" here
 }
 
-function pct(val) { return Math.round(100 * val) + "%"; }
+function pct(val, prec) { return Math.round(100 * val / (prec || 1)) * (prec || 1) + "%"; }
 
 function commas(num) { return num.toLocaleString(); } //grouping (1000s) default = true
+
+function echo(val, desc) { console.error((desc || "echo: #").replace(/#/, JSON.stringify(val))); return val; }
+
+function rg(str, ok)  { return ok? str.green: str.red; }
+
+function plural(count, multiple, single)
+{
+    if (typeof count == "object") count = numkeys(count);
+    else if (count.length) count = count.length; //array
+    plural.suffix = (count == 1)? single || "": multiple || "s";
+    return count;
+}
 
 function numkeys(obj) { return Object.keys(obj || {}).length; }
 
@@ -337,6 +360,12 @@ function error(msg) { throw `${msg || "error"}  @${__parent_line}`.red; }
 
 function warn(msg) { console.error(`${msg}  @${__parent_line}`.yellow); }
 
+function entries(obj)
+{
+    if (Object.prototype.entries) return Object.entries(obj);
+    return Object.keys(obj).map((key) => [key, obj[key]]);
+}
+
 function forEachRev(ary, cb)
 {
     for (var i = ary.length - 1; i >= 0; --i) cb(ary[i], i, ary);
@@ -346,14 +375,19 @@ function forEachRev(ary, cb)
 
 function extensions()
 {
+    if (extensions.done) return; //once only
     Object.defineProperty(global, '__parent_line', { get: function() { return __stack[2].getLineNumber(); } });
 //    Object.defineProperty(global, '__grand_parent_line', { get: function() { return __stack[3].getLineNumber(); } });
+//console.error("apt", (Array.prototype.top || "none").toString());
 if (!Array.prototype.top)
     Object.defineProperty(Array.prototype, "top", //{ get() { return this[this.length - 1]; }, });
     {
         get() { return this[this.length - 1]; },
         set(newval) { this.pop(); this.push(newval); },
     });
+if (!Array.prototype.push_fluent)
+    Array.prototype.push_fluent = function() { this.push.apply(this, arguments); return this; }
+//console.error("apt", (Array.prototype.top || "none").toString());
     Array.prototype.forEachRev = function(cb) { return forEachRev(this, cb); }
 
     String.prototype.replace_log = function(re, newstr)
@@ -366,15 +400,22 @@ if (!Array.prototype.top)
     String.prototype.replace_unn_log = function(re, newstr, delims)
     {
         let retval = replace_unnested(this, re, newstr, delims);
-        if (retval == this) console.error(`Did not replace '${re.source}' @${__stack[1].getLineNumber()} in ${extensions.bname || __file}`.yellow);
+        if ((retval == this) && !replace_unnested.nowarn) console.error(`Did not replace '${re.source}' @${__stack[1].getLineNumber()} in ${extensions.bname}`.yellow);
         return retval;
     }
+if (!String.prototype.splice) //NOTE: strings are immutable so caller must use assignment stmt
+    String.prototype.splice = function(ofs, len, ...more) { return this.slice(0, ofs) + more.join("") + this.slice(ofs + len); }
     Object.defineProperty(String.prototype, "escnl", { get() { return (this || "").replace(/\r/g, "\\r").replace(/\n/g, "\\n"); }, });
     Object.defineProperty(String.prototype, "escall", { get() { return (this || "").replace(/\r/g, "\\r").replace(/\n/g, "\\n").replace(/\t/g, "\\t").replace(/[^\x1b\x20-\x7E]/g, (match) => "\\x" + match.charCodeAt(0).toString(16)); }, }); //allow Esc for color
+//console.error("apt", (Array.prototype.top || "none").toString());
+//    if (!Array.prototype.top)
+//        Object.defineProperty(Array.prototype, "top", { get() { return this[this.length - 1]; }, });
+//console.error("apt", (Array.prototype.top || "none").toString());
+    extensions.done = true;
 }
 
 //share helper functions with others:
 if (!module.parent) main();
-[dedupe, commas, numkeys, numlines, pct, trunc, highlight, /*exclre, replace_log,*/ json_tidy, extensions, replace_unnested, warn, error].forEach((func) => module.exports[func.name] = func);
+[dedupe, commas, echo, plural, numkeys, numlines, pct, trunc, highlight, rg, /*exclre, replace_log,*/ json_tidy, entries, extensions, replace_unnested, warn, error].forEach((func) => module.exports[func.name] = func);
 
 //eof

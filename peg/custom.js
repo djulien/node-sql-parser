@@ -7,6 +7,7 @@
 //require("magic-globals"); //https://github.com/gavinengel/magic-globals
 require("colors").enabled = true; //for console output; https://github.com/Marak/colors.js/issues/127
 const util = require("util");
+const {commas, highlight, echo, entries} = require("../peg/ant2peg");
 
 //    const HELLO = "hello";
 
@@ -50,10 +51,10 @@ const util = require("util");
     }
 
 //make it easier to see where error is:
-    function highlight(str, ofs, len)
-    {
-        return `${str.slice(Math.max(ofs - len, 0), Math.max(ofs - 1, 0)).blue}${str.slice(Math.max(ofs -1, 0), ofs + 1).red}${str.slice(ofs + 1, ofs + len).blue}`.replace(/\n/g, "\\n");
-    }
+//    function highlight(str, ofs, len)
+//    {
+//        return `${str.slice(Math.max(ofs - len, 0), Math.max(ofs - 1, 0)).blue}${str.slice(Math.max(ofs -1, 0), ofs + 1).red}${str.slice(ofs + 1, ofs + len).blue}`.replace(/\n/g, "\\n");
+//    }
 
 //return "true" so these can all be embedded into grammar rules:
     function DEBUG(n)
@@ -75,7 +76,7 @@ debugger;
         return `${info.start.offset}@${info.start.line}.${info.start.column}`; //more abreviated info
     }
 
-    const state = []; //{};
+//    const state = []; //{};
 //    {
 //        verbs: [], //stack
 //        tbls: {},
@@ -131,6 +132,7 @@ debugger;
 //        return name_obj; //true;
 //    }
 
+    const state = []; //{};
 
     function addref(type, name_obj)
     {
@@ -149,8 +151,14 @@ debugger;
 //forget any parse results since chkpt
 //        parse_results.push(state_name);
 //        saved_state[state_name] = results.seq++;
-        state.splice(chkpt - 1).forEach((depth, inx) => console.error(`chkpt[${inx}]: dropping ${JSON.stringify(depth, null, 2)}`));
+        state.splice(chkpt - 1); //.forEach((depth, inx) => console.error(`chkpt[${inx}]: dropping ${JSON.stringify(depth, null, 2)} @${__file}:${__line}`));
         return true;
+    }
+
+    function unchkpt(chkval)
+    {
+        if (chkval.map) chkval = chkval.map((aryval) => aryval.join? aryval.join(""): aryval).join("");
+        return chkval.join? chkval.join(""): chkval;
     }
 
 //reformat lexer/parser rule results into simpler data fmts:
@@ -189,6 +197,7 @@ debugger;
             #KEYWORDS# //this will be replaced by a list of keywords
         };
         str = key(str);
+if (!str.toUpperCase) throw new Error(`!str? ${typeof str}: ${JSON.stringify(str)} @${__file}:${__line}`.red);
         return keywds[str.toUpperCase()];
     }
 
@@ -196,6 +205,7 @@ debugger;
 //first prop name is used as object "type" without needing extra prototypes
     function key(obj)
     {
+if (typeof obj != "object") throw new Error(`!obj @${__file}:${__line}`.red);
         const keys = Object.keys(obj || {});
         return keys.length? obj[keys[0]]: obj;
     }
@@ -214,7 +224,7 @@ debugger;
     }
 */
 
-    function commas(num) { return num.toLocaleString(); } //grouping (1000s) default = true
+//    function commas(num) { return num.toLocaleString(); } //grouping (1000s) default = true
 
 //return parsed results:
     function results()
@@ -223,7 +233,7 @@ debugger;
 //        state.started = null;
 //console.error("results".cyan);
 //        inspect(state); //TODO: return this to caller
-        return state; //true;
+        return entries(state).reduce((retval, [key, val]) => { if (val) retval[key] = val; return retval; }, {}); //true;
     }
 //kludge: hang extra functions/data off parse() so they will also be exported
 //    peg$parse.from = from;

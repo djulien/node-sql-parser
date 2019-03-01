@@ -2288,7 +2288,7 @@ APPROXIMATE_NUM_LIT: FLOAT_FRAGMENT ([E] [-+]? (FLOAT_FRAGMENT | [0-9]+))? [DF]?
 // and a superfluous subtoken typecasting of the "QUOTE"
 //avoid "infinite loop" error in peg: -DJ
 //CHAR_STRING: '\''  (~('\'' | '\r' | '\n') | '\'' '\'' | NEWLINE)* '\'';
-CHAR_STRING: "'"  inner=( [^'\r\n]  |  "''" { return "'"; } |  NEWLINE)* "'" WHITE_SPACE { return {CHAR_STRING: inner.join("")}; };
+CHAR_STRING: "'"  inner=( [^'\r\n]  |  "''" { return "'"; } |  NEWLINE)* "'" WHITE_SPACE { return {CHAR_STRING: unchkpt(inner)}; }; //chkpt pairs
 
 
 // Perl-style quoted string, see Oracle SQL reference, chapter String Literals
@@ -2303,7 +2303,7 @@ fragment QS_OTHER_CH: ~('<' | '{' | '[' | '(' | ' ' | '\t' | '\n' | '\r');
 //avoid "infinite loop" error in peg: -DJ
 //kludge: avoid strings to prevent white space -DJ
 //DELIMITED_ID: '"' (~('"' | '\r' | '\n') | '"' '"')+ '"' ;
-DELIMITED_ID: ["]  inner=( [^"\r\n]  |  ["]["])+ '"' { return {DELIMITED_ID: inner.join("")}; };
+DELIMITED_ID: ["]  inner=( [^"\r\n]  |  ["]["])+ '"' { return {DELIMITED_ID: unchkpt(inner)}; }; //chkpt pairs
 
 PERCENT:                   '%';
 AMPERSAND:                 '&';
@@ -2321,7 +2321,7 @@ ASSIGN_OP:                 ':=';
 //kludge: avoid strings to prevent white space -DJ
 BINDVAR
 //    : ':' SIMPLE_LETTER  (SIMPLE_LETTER | [0-9] | '_')*
-    : [:] first=SIMPLE_LETTER  more=(SIMPLE_LETTER | [0-9_])* TOKEND { return {BINDVAR: first + more.join("")}; }
+    : [:] first=SIMPLE_LETTER  more=(SIMPLE_LETTER | [0-9_])* TOKEND { return {BINDVAR: first + unchkpt(more)}; } //chkpt pairs
     | [:] DELIMITED_ID  // not used in SQL but spotted in v$sqltext when using cursor_sharing
     | [:] UNSIGNED_INTEGER
     | QUESTION_MARK // not in SQL, not in Oracle, not in OCI, use this for JDBC
@@ -2374,7 +2374,7 @@ START_CMD
 
 //kludge: avoid strings to prevent white space -DJ
 //REGULAR_ID: SIMPLE_LETTER (SIMPLE_LETTER | '$' | '_' | '#' | [0-9])*;
-REGULAR_ID: head=SIMPLE_LETTER tail=(SIMPLE_LETTER | [$_#0-9])* TOKEND { return {REGULAR_ID: head + tail.join("")}; };
+REGULAR_ID: first=SIMPLE_LETTER more=(SIMPLE_LETTER | [$_#0-9])* TOKEND { return {REGULAR_ID: first + unchkpt(more)}; }; //CAUTION: chkpt causes pairs instead of chars
 
 SPACES: [ \t\r\n]+ -> channel(HIDDEN);
 

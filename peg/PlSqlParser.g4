@@ -31,6 +31,7 @@ options {
 
 sql_script
     : ((unit_statement | sql_plus_command) SEMICOLON?)* EOF
+//    | expression SEMICOLON EOF //allow stand-alone expr (NULL kludge) -DJ
     ;
 
 //commented out unneeded stuff -DJ
@@ -116,7 +117,7 @@ alter_function
 //make "create" optional -DJ
 //remove unneeded stuff -DJ
 create_function_body
-    : (CREATE (OR REPLACE)?)? FUNCTION function_name ('(' (','? parameter)+ ')')?
+    : (CREATE (OR REPLACE)?)? FUNCTION name=function_name { return addref("proc_defs", name); }? ('(' (','? parameter)+ ')')?
 //    : CREATE (OR REPLACE)? FUNCTION function_name ('(' parameter (',' parameter)* ')')?
       RETURN type_spec // (invoker_rights_clause | parallel_enable_clause | result_cache_clause | DETERMINISTIC)*
       ((PIPELINED? (IS | AS) (DECLARE? seq_of_declare_specs? body | call_spec)) | (PIPELINED | AGGREGATE) USING implementation_type_name) ';'
@@ -208,20 +209,21 @@ alter_procedure
 
 //remove unneeded stuff -DJ
 function_body
-    : FUNCTION identifier ('(' parameter (',' parameter)* ')')?
+    : FUNCTION id=identifier { return addref("func_defs", id); }? ('(' parameter (',' parameter)* ')')?
       RETURN type_spec // (invoker_rights_clause | parallel_enable_clause | result_cache_clause | DETERMINISTIC)*
       ((PIPELINED? (IS | AS) (DECLARE? seq_of_declare_specs? body | call_spec)) | (PIPELINED | AGGREGATE) USING implementation_type_name) ';'
     ;
 
 procedure_body
-    : PROCEDURE identifier ('(' parameter (',' parameter)* ')')? (IS | AS)
+    : PROCEDURE id=identifier { return addref("proc_defs", id); }? ('(' parameter (',' parameter)* ')')? (IS | AS)
       (DECLARE? seq_of_declare_specs? body | call_spec | EXTERNAL) ';'
     ;
 
 //make "create" optional -DJ
 //remove unneeded stuff -DJ
+//TODO: merge with procedure_body above? -DJ
 create_procedure_body
-    : (CREATE (OR REPLACE)?)? PROCEDURE procedure_name ('(' parameter (',' parameter)* ')')?
+    : (CREATE (OR REPLACE)?)? PROCEDURE name=procedure_name { return addref("proc_defs", name); }? ('(' parameter (',' parameter)* ')')?
       /*invoker_rights_clause?*/ (IS | AS)
       (DECLARE? seq_of_declare_specs? body | call_spec | EXTERNAL) ';'
     ;
@@ -3315,7 +3317,7 @@ subquery_operation_part
 //fix ambiguous element list (too greedy) -DJ
 query_block
 //    : SELECT { return verb({verb: "select"}); }? (DISTINCT | UNIQUE | ALL)? (ASTERISK | (','? selected_element)+) //{ return DEBUG(8); }?
-    : SELECT { return verb({verb: "select"}); }? (DISTINCT | UNIQUE | ALL)? (ASTERISK | selected_element (',' selected_element)*) //{ return DEBUG(8); }?
+    : SELECT { return addref("verbs", {verb: "select"}); }? (DISTINCT | UNIQUE | ALL)? (ASTERISK | selected_element (',' selected_element)*) //{ return DEBUG(8); }?
       into_clause? from_clause where_clause? hierarchical_query_clause? group_by_clause? model_clause?
     ;
 
@@ -3736,13 +3738,42 @@ cursor_expression
 //avoid recursion -DJ
 //reorder to give AND/OR priority -DJ
 //refactor for more efficient parsing (avoid multiple model_expr eval) -DJ
-logical_expression
-    : /*logical_expression*/ mse=multiset_expression 
-        more=( AND e=logical_expression { return {AND: e}}
-        | OR e=logical_expression { return {OR: e}}
-        | IS n=NOT? val=(NULL_ | NAN | PRESENT | INFINITE | A_LETTER SET | EMPTY | OF TYPE? '(' ONLY? type_spec (',' type_spec)* ')')+ { return n? {ISNOT: val}: {IS: val}}
+other_logical_expression
+    : /*logical_expression*/ lhs=multiset_expression rhs=(AND e=logical_expression { return e; })* { return {AND: [lhs, rhs]}}
+    | /*logical_expression*/ lhs=multiset_expression rhs=(OR e=logical_expression { return e; })* { return {OR: [lhs, rhs]}}
+    | (IS NOT | "!" !"=") logical_expression
+    | multiset_expression
+    ;    
+/*
+ast_logical_expression
+    : lhs=logical_expression2 rhs=(OR e=logical_expression2 { return e; })* { return {OR: [lhs, rhs]}}
+    ;    
+ast_logical_expression2
+    : lhs=logical_expression3 rhs=(AND e=logical_expression3 { return e; })* { return {AND: [lhs, rhs]}}
+    ;    
+ast_logical_expression3
+    : (NOT | "!" !"=") logical_expression3
+    | multiset_expression
+    ;    
+*/
+broken_logical_expression
+    : /*logical_expression*/ mse=multiset_expression //{ return DEBUG(66); }?
+        more=
+        (
+            (AND { return DEBUG(67); }? e=logical_expression { DEBUG(68); return {AND: e}})*
+          | (OR e=logical_expression { return {OR: e}})*
+          | IS n=NOT? val=(NULL_ | NAN | PRESENT | INFINITE | A_LETTER SET | EMPTY | OF TYPE? '(' ONLY? type_spec (',' type_spec)* ')')+ { DEBUG(69); return n? {ISNOT: val}: {IS: val}}
         )? { return more? {mse, more}: mse}
     | NOT e=logical_expression { return {NOT: e}; }
+    ;
+logical_expression //good
+//    : /*logical_expression*/ multiset_expression AND logical_expression
+//    | /*logical_expression*/ multiset_expression OR logical_expression
+    : multiset_expression (IS NOT?
+        (NULL_ | NAN | PRESENT | INFINITE | A_LETTER SET | EMPTY | OF TYPE?
+        '(' ONLY? type_spec (',' type_spec)* ')'))*
+        ((AND / OR) logical_expression)*
+    | NOT logical_expression
     ;
 SLOWER_logical_expression
     : /*logical_expression*/ multiset_expression AND logical_expression
@@ -4187,7 +4218,7 @@ schema_name
     ;
 
 routine_name
-    : /*{ return DEBUG(3); }?*/ first=identifier more=('.' id_expression)* ('@' link_name)? { return funcref(key(first) + more.map((parts) => key(parts[1+1])).join(".")); }?
+    : /*{ return DEBUG(3); }?*/ first=identifier more=('.' id_expression)* ('@' link_name)? { more.unshift([null, first]); return addref("func_refs", more.map((parts) => key(parts[0+1])).join(".")); }?
     ;
 
 package_name
@@ -4291,11 +4322,11 @@ link_name
     ;
 
 column_name
-    : first=identifier more=('.' id=id_expression { return id; })* { more.unshift(first); const colname = {column_name: more.map((part) => key(part)).join(".")}; colref(colname); return colname; }
+    : first=identifier more=('.' id=id_expression { return id; })* { more.unshift(first); return addref("col_refs", {column_name: more.map((part) => key(part)).join(".")}); }
     ;
 
 tableview_name
-    : first=identifier more=('.' id=id_expression { return id; })? { const tvname = {tblvw_name: [first, more || {}].map((part) => key(part)).join(".")}; return tblref(tvname); }?
+    : first=identifier more=('.' id=id_expression { return id; })? { /*DEBUG(55);*/ return addref("tbl_refs", {tblvw_name: key(first) + (more? `.${key(more)}`: "")}); }?
       ('@' link_name | /*TODO{!(input.LA(2) == BY)}?*/ partition_extension_clause)?
     ;
 
@@ -4639,6 +4670,7 @@ identifier
 identifier_kywdok
 //no worky    : (INTRODUCER char_set_name)? id=id_expression /*~{ return iskeywd(id); }?*/ { return id; }
     : identifier
+    | VALUE //kludge: just hard-code the ones that are needed -DJ
     ;
 
 id_expression

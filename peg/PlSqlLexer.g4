@@ -2288,7 +2288,7 @@ APPROXIMATE_NUM_LIT: FLOAT_FRAGMENT ([E] [-+]? (FLOAT_FRAGMENT | [0-9]+))? [DF]?
 // and a superfluous subtoken typecasting of the "QUOTE"
 //avoid "infinite loop" error in peg: -DJ
 //CHAR_STRING: '\''  (~('\'' | '\r' | '\n') | '\'' '\'' | NEWLINE)* '\'';
-CHAR_STRING: "'"  inner=( [^'\r\n]  |  "''" { return "'"; } |  NEWLINE)* "'" WHITE_SPACE { return {CHAR_STRING: unchkpt(inner)}; }; //chkpt pairs
+CHAR_STRING: "'"  inner=( [^'\r\n]  |  "''" { return "'"; } |  NEWLINE)* "'" WHITE_SPACE { const retval = {CHAR_STRING: unchkpt(inner)}; return (retval.CHAR_STRING.length > 4)? addref("lit_strs", retval): retval; }; //chkpt pairs
 
 
 // Perl-style quoted string, see Oracle SQL reference, chapter String Literals

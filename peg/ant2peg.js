@@ -102,6 +102,7 @@ for (;;)
 //allow these to be used as identifiers:
         A_LETTER: false, //avoid warnings below
         TYPE: false,
+        ERR: false,
     };
     const parts = keywd_re.exec(src);
     if (!parts) break;
@@ -416,6 +417,6 @@ if (!String.prototype.splice) //NOTE: strings are immutable so caller must use a
 
 //share helper functions with others:
 if (!module.parent) main();
-[dedupe, commas, echo, plural, numkeys, numlines, pct, trunc, highlight, rg, /*exclre, replace_log,*/ json_tidy, entries, extensions, replace_unnested, warn, error].forEach((func) => module.exports[func.name] = func);
+[dedupe, commas, echo, plural, numkeys, numlines, pct, trunc, highlight, rg, /*exclre, replace_log,*/ json_tidy, entries, extensions, replace_unnested, warn, error, inspect, debug].forEach((func) => module.exports[func.name] = func);
 
 //eof

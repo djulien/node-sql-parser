@@ -5,23 +5,23 @@
 //gets inserts below parser logic right before parser start rule is invoked
 {
 //require("magic-globals"); //https://github.com/gavinengel/magic-globals
-require("colors").enabled = true; //for console output; https://github.com/Marak/colors.js/issues/127
-const util = require("util");
-const {commas, highlight, echo, entries} = require("../peg/ant2peg");
+//require("colors").enabled = true; //for console output; https://github.com/Marak/colors.js/issues/127
+//const util = require("util");
+const {commas, highlight, echo, entries, numkeys, inspect} = require("../peg/ant2peg");
 
 //    const HELLO = "hello";
 
 //debug info:
     function debug(str) { console.log(str); }
 
-    function inspect(obj) { console.log(util.inspect(obj, false, 10)); }
+//    function inspect(obj) { console.log(util.inspect(obj, false, 10)); }
 
 //wedge debug info (override peg funcs):
 //  const sv_peg$buildStructuredError = peg$buildStructuredError;
     function peg$buildStructuredError(expected, found, location)
     {
-        console.log("fail exp", peg$maxFailExpected);
-        console.log("fail pos", peg$maxFailPos, "line", input.slice(0, peg$maxFailPos).split(/\n/).length, highlight(input, peg$maxFailPos, 20));
+        console.log("fail exp".red, peg$maxFailExpected);
+        console.log("fail pos".red, peg$maxFailPos, "line", input.slice(0, peg$maxFailPos).split(/\n/).length, highlight(input, peg$maxFailPos, 20));
 //    return sv_peg$buildStructuredError.apply(null, arguments);
         return new peg$SyntaxError(
             peg$SyntaxError.buildMessage(expected, found),
@@ -60,9 +60,12 @@ const {commas, highlight, echo, entries} = require("../peg/ant2peg");
     function DEBUG(n)
     {
 //    var called_from = __stack[1].getLineNumber();
+if (!state.srcline.match(/:-1$/)) return true;
         if (!DEBUG.seen) DEBUG.seen = {};
         ++DEBUG.seen[n] || (DEBUG.seen[n] = 1);
-console.error(`DEBUG(${n}) ${state.srcline}`.red);
+console.error(`DEBUG(${n}) loc ${my_location()} ${state.srcline}`.red);
+console.error("STACK", __stack.slice(2).map((stkfr, inx, all) => (all[all.length - inx - 1].getFunctionName() || "no func?").replace(/^peg\$parse/, "")).join(" -> ").cyan);
+console.error("inp:", input.slice(peg$currPos, peg$currPos + 30).escall.blue);
 //if (!DEBUG.seen) debugger; //first time only;
 debugger;
         if (n < 0) throw `DEBUG(${n}) ${state.srcline}`.red;
@@ -93,14 +96,14 @@ debugger;
 //        return true;
 //    }
 
-    function colref(name) { return addref("col_refs", name_obj); }
+//    function colref(name) { return addref("col_refs", name_obj); }
 //    {
 //        (state.top.cols[name] || (state.top.cols[name] = [])).push(my_location());
 //debugger;
 //        return true;
 //    }
 
-    function tblref(name_obj) { return addref("tbl_refs", name_obj); }
+//    function tblref(name_obj) { return addref("tbl_refs", name_obj); }
 //    {
 //console.error(`tblref @${__line}`, JSON.stringify(name));
 //process.exit();
@@ -109,21 +112,21 @@ debugger;
 //        return name_obj; //true;
 //    }
 
-    function funcref(name_obj) { return addref("func_refs", name_obj); }
+//    function funcref(name_obj) { return addref("func_refs", name_obj); }
 //    {
 //        (state.top.func_refs[key(name_obj)] || (state.top.func_refs[key(name_obj)] = [])).push(my_location());
 //debugger;
 //        return name_obj; //true;
 //    }
 
-    function funcdef(name_obj) { return addref("func_defs", name_obj); }
+//    function funcdef(name_obj) { return addref("func_defs", name_obj); }
 //    {
 //        (state.top.func_defs[key(name_obj)] || (state.top.func_defs[key(name_obj)] = [])).push(my_location());
 //debugger;
 //        return name_obj; //true;
 //    }
 
-    function verb(name_obj) { return addref("verbs", name_obj); }
+//    function verb(name_obj) { return addref("verbs", name_obj); }
 //    {
 //        if (!name) state.verb.pop();
 //        else state.verb.push(name);
@@ -233,7 +236,10 @@ debugger;
 //        state.started = null;
 //console.error("results".cyan);
 //        inspect(state); //TODO: return this to caller
-        return entries(state).reduce((retval, [key, val]) => { if (val) retval[key] = val; return retval; }, {}); //true;
+        const retval = {};
+//        return state.reduce((keep, val) => numkeys(val)? keep.push_fluent(val): keep, []); //true;
+        state.forEach((chkpt) => entries(chkpt).forEach(([type, list]) => retval[type] = list.concat.apply(list, retval[type] || [])));
+        return retval;
     }
 //kludge: hang extra functions/data off parse() so they will also be exported
 //    peg$parse.from = from;

@@ -36,6 +36,7 @@ sql_script
 
 //commented out unneeded stuff -DJ
 unit_statement
+//    : anonymous_block //put this one first so "BEGIN" ... "END" will match -DJ
 //    : transaction_control_statements
 //    | alter_cluster
 //    | alter_database
@@ -60,8 +61,8 @@ unit_statement
 //    | audit_traditional
 //    | unified_auditing
 
-    : create_function_body
-    | create_procedure_body
+//    | create_function_body
+//    | create_procedure_body
 //    | create_package
 //    | create_package_body
 
@@ -94,7 +95,7 @@ unit_statement
 //    | comment_on_column
 //    | comment_on_table
 
-    | anonymous_block
+    : anonymous_block
 
 //    | grant_statement
 
@@ -208,22 +209,24 @@ alter_procedure
     ;
 
 //remove unneeded stuff -DJ
+//don't eat trailing ";"; needed for seq_of_statements -DJ
 function_body
     : FUNCTION id=identifier { return addref("func_defs", id); }? ('(' parameter (',' parameter)* ')')?
       RETURN type_spec // (invoker_rights_clause | parallel_enable_clause | result_cache_clause | DETERMINISTIC)*
-      ((PIPELINED? (IS | AS) (DECLARE? seq_of_declare_specs? body | call_spec)) | (PIPELINED | AGGREGATE) USING implementation_type_name) ';'
+      ((PIPELINED? (IS | AS) (DECLARE? seq_of_declare_specs? body | call_spec)) | (PIPELINED | AGGREGATE) USING implementation_type_name) //';'
     ;
 
+//don't eat trailing ";"; needed for seq_of_statements -DJ
 procedure_body
     : PROCEDURE id=identifier { return addref("proc_defs", id); }? ('(' parameter (',' parameter)* ')')? (IS | AS)
-      (DECLARE? seq_of_declare_specs? body | call_spec | EXTERNAL) ';'
+      (DECLARE? seq_of_declare_specs? body | call_spec | EXTERNAL) //';'
     ;
 
-//make "create" optional -DJ
+//no-make "create" optional -DJ
 //remove unneeded stuff -DJ
 //TODO: merge with procedure_body above? -DJ
 create_procedure_body
-    : (CREATE (OR REPLACE)?)? PROCEDURE name=procedure_name { return addref("proc_defs", name); }? ('(' parameter (',' parameter)* ')')?
+    : CREATE (OR REPLACE)? PROCEDURE name=procedure_name { return addref("proc_defs", name); }? ('(' parameter (',' parameter)* ')')?
       /*invoker_rights_clause?*/ (IS | AS)
       (DECLARE? seq_of_declare_specs? body | call_spec | EXTERNAL) ';'
     ;
@@ -3147,8 +3150,9 @@ trigger_block
     : (DECLARE? declare_spec+)? body
     ;
 
+//make body optional to allow stand-alone proc defs -DJ
 block
-    : DECLARE? declare_spec+ body
+    : DECLARE? declare_spec+ body?
     ;
 
 // SQL Statements
@@ -3977,7 +3981,7 @@ other_function
 //    | EXTRACT '(' regular_id FROM concatenation ')'
     | (FIRST_VALUE | LAST_VALUE) function_argument_analytic respect_or_ignore_nulls? over_clause
 //    | standard_prediction_function_keyword
-      '(' expressions cost_matrix_clause? using_clause? ')'
+//      '(' expressions cost_matrix_clause? using_clause? ')'
     | TRANSLATE '(' expression (USING (CHAR_CS | NCHAR_CS))? (',' expression)* ')'
 //    | TREAT '(' expression AS REF? type_spec ')'
     | TRIM '(' ((LEADING | TRAILING | BOTH)? quoted_string? FROM)? concatenation ')'

@@ -2894,8 +2894,9 @@ primary_key_clause
 
 // Anonymous PL/SQL code block
 
+//make trailing ";" optional -DJ
 anonymous_block
-    : (DECLARE seq_of_declare_specs)? BEGIN seq_of_statements (EXCEPTION exception_handler+)? END SEMICOLON
+    : (DECLARE seq_of_declare_specs)? BEGIN seq_of_statements (EXCEPTION exception_handler+)? END SEMICOLON?
     ;
 
 // Common DDL Clauses
@@ -3028,6 +3029,7 @@ label_declaration
     : ltp1= '<' '<' label_name '>' '>'
     ;
 
+//NONE of these should eat a ";" (should be consistent); seq_of_statements takes care of the trailing ";" -DJ
 statement
     : body
     | block
@@ -3136,8 +3138,9 @@ procedure_call
 pipe_row_statement
     : PIPE ROW '(' expression ')';
 
+//NO-add trailing ";" -DJ
 body
-    : BEGIN seq_of_statements (EXCEPTION exception_handler+)? END label_name?
+    : BEGIN seq_of_statements (EXCEPTION exception_handler+)? END label_name? //';'
     ;
 
 // Body Specific Clause
@@ -4222,7 +4225,7 @@ schema_name
     ;
 
 routine_name
-    : /*{ return DEBUG(3); }?*/ first=identifier more=('.' id_expression)* ('@' link_name)? { more.unshift([null, first]); return addref("func_refs", more.map((parts) => key(parts[0+1])).join(".")); }?
+    : /*{ return DEBUG(3); }?*/ first=identifier more=('.' id_expression)* ('@' link_name)? { if (key(first) == "web") DEBUG(1); key(first); first[key.name1] += more.map((parts) => key(parts.top)).join("."); return addref("func_refs", first); }?
     ;
 
 package_name
@@ -4495,10 +4498,12 @@ bind_variable
 
 general_element
     : general_element_part ('.' general_element_part)*
+//    : first=general_element_part more=('.' elt=general_element_part { return elt; })* { return addref("general", {element: key(first) + (more? `.${key(more)}`: "")}); }
     ;
 
 general_element_part
-    : (INTRODUCER char_set_name)? id_expression ('.' id_expression)* ('@' link_name)? function_argument?
+//    : (INTRODUCER char_set_name)? id_expression ('.' d_expression)* ('@' link_name)? function_argument?
+    : (INTRODUCER char_set_name)? first=id_expression more=('.' id_expression)* { if ((key(first) == "sysdate") || (key(first) == "CASE_NUM")) DEBUG(1+1); const name = key(first) + more.map((parts) => `.${key(parts[1])}`).join(""); return iskeywd(name) || addref("general", {element: name}); }? ('@' link_name)? function_argument?
     ;
 
 table_element
@@ -6823,7 +6828,7 @@ non_reserved_keywords_pre12c
     | ZONE
     ;
 
-//add INSTR, NVL, TO_DATE -DJ
+//add INSTR, NVL, TO_DATE, LTRIM, RTRIM -DJ
 //NOTE: this rule is unused
 string_function_name
     : CHR

@@ -2243,6 +2243,7 @@ LEAST:                        'LEAST';
 GREATEST:                     'GREATEST';
 TO_DATE:                      'TO_DATE';
 
+
 // Rule #358 <NATIONAL_CHAR_STRING_LIT> - subtoken typecast in <REGULAR_ID>, it also incorporates <character_representation>
 //  Lowercase 'n' is a usual addition to the standard
 
@@ -2287,8 +2288,9 @@ APPROXIMATE_NUM_LIT: FLOAT_FRAGMENT ([E] [-+]? (FLOAT_FRAGMENT | [0-9]+))? [DF]?
 // Rule #--- <CHAR_STRING> is a base for Rule #065 <char_string_lit> , it incorporates <character_representation>
 // and a superfluous subtoken typecasting of the "QUOTE"
 //avoid "infinite loop" error in peg: -DJ
+//only track strings with alpha "word" >= 4 chars -DJ
 //CHAR_STRING: '\''  (~('\'' | '\r' | '\n') | '\'' '\'' | NEWLINE)* '\'';
-CHAR_STRING: "'"  inner=( [^'\r\n]  |  "''" { return "'"; } |  NEWLINE)* "'" WHITE_SPACE { const retval = {CHAR_STRING: unchkpt(inner)}; return (retval.CHAR_STRING.length > 4)? addref("lit_strs", retval): retval; }; //chkpt pairs
+CHAR_STRING: "'"  inner=( [^'\r\n]  |  "''" { return "'"; } |  NEWLINE)* "'" WHITE_SPACE { const retval = {CHAR_STRING: unchkpt(inner)}; return retval.CHAR_STRING.match(/[a-z]{4,}/i)? addref("lit_strs", retval): retval; }; //chkpt pairs
 
 
 // Perl-style quoted string, see Oracle SQL reference, chapter String Literals

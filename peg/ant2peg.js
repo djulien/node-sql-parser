@@ -330,6 +330,7 @@ function trunc(str, len, esc)
 
 function json_tidy(str)
 {
+return str;
     return (str || "").replace(/(\{)"|(,)"|"(:)/g, "$1$2$3"); //|#PEG-KLUDGE#\}/g, "$1$2$3"); //kludge: peg parser wants matched "}" here
 }
 
@@ -388,6 +389,8 @@ if (!Array.prototype.top)
     });
 if (!Array.prototype.push_fluent)
     Array.prototype.push_fluent = function() { this.push.apply(this, arguments); return this; }
+if (!Array.prototype.unshift_fluent)
+    Array.prototype.unshift_fluent = function() { this.unshift.apply(this, arguments); return this; }
 //console.error("apt", (Array.prototype.top || "none").toString());
     Array.prototype.forEachRev = function(cb) { return forEachRev(this, cb); }
 

@@ -4,6 +4,7 @@
 //adds custom logic to peg parser
 //gets inserts below parser logic right before parser start rule is invoked
 {
+    const SHOW_RULE = false; //true;
 //require("magic-globals"); //https://github.com/gavinengel/magic-globals
 //require("colors").enabled = true; //for console output; https://github.com/Marak/colors.js/issues/127
 //const util = require("util");
@@ -46,8 +47,7 @@ const {commas, highlight, echo, entries, numkeys, inspect} = require("../peg/ant
 //        peg$maxFailExpected.push(expected);
 //inspect(__stack[0]);
 //console.log(__stack.map((stkfr) => stkfr.getFunctionName()).join(" -> "));
-        const where = __stack.slice(1).map((stkfr) => (stkfr.getFunctionName() || "?").replace(/^peg\$parse/, "")).reverse().join(" -> ");
-        peg$maxFailExpected.push(Object.assign({}, expected, {where})); //show rule stack
+        peg$maxFailExpected.push(Object.assign({}, expected, {where: rule_stack()})); //show rule stack
     }
 
 //make it easier to see where error is:
@@ -60,7 +60,7 @@ const {commas, highlight, echo, entries, numkeys, inspect} = require("../peg/ant
     function DEBUG(n)
     {
 //    var called_from = __stack[1].getLineNumber();
-if (!state.srcline.match(/:7735$/)) return true;
+if (n != 1) if (!state.srcline.match(/:7735$/)) return true;
         if (!DEBUG.seen) DEBUG.seen = {};
         ++DEBUG.seen[n] || (DEBUG.seen[n] = 1);
 console.error(`DEBUG(${n}) loc ${my_location()} ${state.srcline}`.red);
@@ -76,7 +76,16 @@ debugger;
     {
         const info = location(); //peg start/end info
 //        return {ofs: info.start.offset, line: info.start.line, col: info.start.column}; //abreviated info
-        return `${info.start.offset}@${info.start.line}.${info.start.column}`; //more abreviated info
+        let retval = `${info.start.offset}@${info.start.line}.${info.start.column}`; //more abreviated info
+        if (info.end.line != info.start.line) retval += `-${info.end.line}.${info.end.column}`;
+        else if (info.end.column != info.start.column) retval += `-${info.end.column}`;
+        return retval;
+    }
+
+    function rule_stack()
+    {
+//drop peg$c### -> addref -> rule_stack:
+        return __stack.slice(1+2).map((stkfr) => (stkfr.getFunctionName() || "?").replace(/^peg\$parse/, "")).reverse().join("/");
     }
 
 //    const state = []; //{};
@@ -140,7 +149,7 @@ debugger;
     function addref(type, name_obj)
     {
 //        (state.top[type][key(name_obj)] || (state.top[type][key(name_obj)] = [])).push(my_location());
-        (state.top[type] || (state.top[type] = [])).push(Object.assign(name_obj, {loc: my_location()}));
+        (state.top[type] || (state.top[type] = [])).push(Object.assign(name_obj, {loc: my_location(), rule: SHOW_RULE? rule_stack(): null}));
 //debugger;
         return name_obj; //true;
     }
@@ -199,7 +208,7 @@ debugger;
         {
             #KEYWORDS# //this will be replaced by a list of keywords
         };
-        str = key(str);
+        if (typeof str != "string") str = key(str);
 if (!str.toUpperCase) throw new Error(`!str? ${typeof str}: ${JSON.stringify(str)} @${__file}:${__line}`.red);
         return keywds[str.toUpperCase()];
     }
@@ -210,6 +219,7 @@ if (!str.toUpperCase) throw new Error(`!str? ${typeof str}: ${JSON.stringify(str
     {
 if (typeof obj != "object") throw new Error(`!obj @${__file}:${__line}`.red);
         const keys = Object.keys(obj || {});
+        key.name1 = keys[0];
         return keys.length? obj[keys[0]]: obj;
     }
 /*
@@ -238,7 +248,13 @@ debugger;
 //        inspect(state); //TODO: return this to caller
         const retval = {};
 //        return state.reduce((keep, val) => numkeys(val)? keep.push_fluent(val): keep, []); //true;
-        state.forEach((chkpt) => entries(chkpt).forEach(([type, list]) => retval[type] = list.concat.apply(list, retval[type] || [])));
+        state.forEach((chkpt) => entries(chkpt).forEach(([type, newlist]) =>
+        {
+            retval[type] = newlist.concat.apply(newlist, retval[type] || []);
+//TODO: consolidate list:
+//            const curlist = retval[type] || (retval[type] = []);
+//            newlist.forEach((item) => ~curlist.indexOf(item)? curlist
+        }));
         return retval;
     }
 //kludge: hang extra functions/data off parse() so they will also be exported

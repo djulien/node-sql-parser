@@ -60,7 +60,7 @@ function main()
         console.error(`${bname} ${commas(numlines(src))} lines, ${commas(src.length)} chars converted, ${commas(numkeys(keywds) - sv_count)} keywords found`.green);
     });
 
-    const src = out.join("\n").replace(/^\s*#KEYWORDS#\s*(\/\/[^\n]+)?$/m, `//${numkeys(keywds)} keywords: $1\n` + Object.keys(keywds).map((keywd) => `\t\t\t'${keywd.toUpperCase()}': true,`).join("\n"));
+    const src = out.join("\n").replace(/^\s*#KEYWORDS#\s*(\/\/[^\n]+)?$/m, `//${numkeys(keywds)} keywords: $1\n` + Object.keys(keywds).map((keywd) => `\t\t\t'${keywd.toUpperCase()}': ${keywds[keywd]},`).join("\n"));
     console.log(src);
     console.error(`total ${commas(numlines(src))} lines, ${commas(src.length)} chars, ${commas(numkeys(keywds))} keywords`.green);
 }
@@ -103,18 +103,20 @@ for (;;)
         A_LETTER: false, //avoid warnings below
         TYPE: false,
         ERR: false,
+        MODEL: false,
+        YEAR: false,
     };
     const parts = keywd_re.exec(src);
     if (!parts) break;
 //    if (parts[NAME] != parts[VAL1] || parts[VAL2]) console.error(`not sure if ${parts[NAME]} is a keyword in line ${numlines(src.slice(0, parts.index))}`.yellow);
-    if (Hardcoded[parts[NAME]] === false) continue; //not a keywd
-    if (parts[NAME] != parts[VAL1] || parts[VAL2])
+    if (Hardcoded.hasOwnProperty(parts[NAME])); //continue; //not a keywd; CAUTION: need to write it out
+    else if (parts[NAME] != parts[VAL1] || parts[VAL2])
     {
-        if (Hardcoded[parts[NAME]]); //add to keywd list below, no warning msg
+//        if (Hardcoded[parts[NAME]]); //add to keywd list below, no warning msg
 //        if (Hardcoded.hasOwnProperty(parts[NAME]));
-        else console.error(`not sure if ${parts[NAME]} is a keyword in line ${numlines(src, parts.index)}`.yellow);
+        /*else*/ console.error(`not sure if ${parts[NAME]} is a keyword in line ${numlines(src, parts.index)}`.yellow);
     }
-    ++keywds[parts[VAL1] || parts[VAL2]];
+    keywds[parts[VAL1] || parts[VAL2]] = Hardcoded.hasOwnProperty(parts[NAME])? Hardcoded[parts[NAME]]: true;
 }
 
 //src = src.replace_log(/^(\s*\r?\n\s+[;|])/gm, "//$1"); //remove blank lines within rules
@@ -322,8 +324,8 @@ function dedupe(str)
 
 function trunc(str, len, esc)
 {
-    var retval = (str || "").slice(0, len);
-    if (retval.length == len) retval += ` ${commas(str.length - len)} more...`.slice(str[len - 1] == " ");
+    var retval = str || "";
+    if (retval.length > len) { retval = retval.slice(0, len).rtrim(); retval += ` ${commas(str.length - retval.length)} more...`; }
     if (esc) retval = retval.escall; //replace(/\r/g, "\\r").replace(/\n/g, "\\n");
     return retval;
 }
@@ -379,6 +381,7 @@ function extensions()
 {
     if (extensions.done) return; //once only
     Object.defineProperty(global, '__parent_line', { get: function() { return __stack[2].getLineNumber(); } });
+    Object.defineProperty(global, '__srcline', { get: function() { return __stack[1].getFileName().replace(/^.*[/\\]/, "") + ":" + __stack[1].getLineNumber(); } });
 //    Object.defineProperty(global, '__grand_parent_line', { get: function() { return __stack[3].getLineNumber(); } });
 //console.error("apt", (Array.prototype.top || "none").toString());
 if (!Array.prototype.top)

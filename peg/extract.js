@@ -171,7 +171,7 @@ function old_way()
 }
 //if ((keep.num_found || 0) < 10) debugger;
 const want_debug = false; //~blocks[name].text.indexOf("tblvw_name"); //false; //~",regular_id,id_expression,identifier,numeric".indexOf(name);
-if (want_debug) console.error(`rule '${name.cyan}' from ${blocks[name].srcline} ${from} text: ${blocks[name].text.blue} @${__line}`);
+if (want_debug) console.error(`rule '${name.cyan}' from ${blocks[name].srcline} ${from} text: ${blocks[name].text.blue} @${__srcline}`);
 if (want_debug) debugger;
     blocks[name].text
         .replace(new RegExp(`${SYMBOL.source}\\s*=`, "gmi"), "") //strip var captures
@@ -185,7 +185,7 @@ if (want_debug) debugger;
             keep(parts[1], blocks[name].srcline);
         });
 if (want_debug) //(++keep.num_found || (keep.num_found = 1)) < 10)
-    console.error(`rule '${name.cyan}' from ${blocks[name].srcline} ${from} ${(blocks[name].children || []).length} children: ${(blocks[name].children || []).join(", ").cyan} @${__line}`);
+    console.error(`rule '${name.cyan}' from ${blocks[name].srcline} ${from} ${(blocks[name].children || []).length} children: ${(blocks[name].children || []).join(", ").cyan} @${__srcline}`);
 if (want_debug) debugger;
 }
 console.error(`minimal set: ${commas(numkeys(keep.blocks))}/${commas(numkeys(blocks))} blocks (${pct(numkeys(keep.blocks) / numkeys(blocks))})`.cyan);

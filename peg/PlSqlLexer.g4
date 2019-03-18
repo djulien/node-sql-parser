@@ -2386,7 +2386,7 @@ fragment NEWLINE_EOF    : NEWLINE | EOF;
 fragment QUESTION_MARK  : '?';
 fragment SIMPLE_LETTER  : [A-Za-z]; //allow lower case -DJ
 //fragment FLOAT_FRAGMENT : UNSIGNED_INTEGER* [.]? UNSIGNED_INTEGER+ ![0-9]; //is !dig look-ahead needed? -DJ
-fragment FLOAT_FRAGMENT : first=[0-9]* dec=[.]? more=[0-9]+ WHITE_SPACE { return {FLOAT_FRAGMENT: +(first.join("") + dec + more.join(""))}; }; //![0-9] ; //is !dig look-ahead needed? -DJ
+fragment FLOAT_FRAGMENT : first=[0-9]+ '.' { return {FLOAT_FRAGMENT: +first.join("")}; } / first=[0-9]* [.]? more=[0-9]+ WHITE_SPACE { return {FLOAT_FRAGMENT: +(first.join("") + "." + more.join(""))}; }; //![0-9] ; //is !dig look-ahead needed? allow trailing "." in numbers -DJ
 //kludge: avoid strings to prevent white space -DJ
 //fragment NEWLINE        : '\r'? '\n';
 fragment NEWLINE        : [\r]? [\n];

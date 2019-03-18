@@ -29,8 +29,9 @@ options {
 #include <PlSqlBaseParser.h>
 }
 
+//allow stand-alone statements or expr (for side effects); put last to allow SELECT stmts to parse -DJ
 sql_script
-    : ((unit_statement | sql_plus_command) SEMICOLON?)* EOF
+    : ((unit_statement | sql_plus_command | seq_of_statements | expression )  SEMICOLON?)* EOF
 //    | expression SEMICOLON EOF //allow stand-alone expr (NULL kludge) -DJ
     ;
 
@@ -96,6 +97,7 @@ unit_statement
 //    | comment_on_table
 
     : anonymous_block
+    | seq_of_declare_specs //allow proc/func defs -DJ
 
 //    | grant_statement
 
@@ -209,17 +211,17 @@ alter_procedure
     ;
 
 //remove unneeded stuff -DJ
-//don't eat trailing ";"; needed for seq_of_statements -DJ
+//no- need for declare_spec; don't eat trailing ";"; needed for seq_of_statements -DJ
 function_body
     : FUNCTION id=identifier { return addref("func_defs", id); }? ('(' parameter (',' parameter)* ')')?
       RETURN type_spec // (invoker_rights_clause | parallel_enable_clause | result_cache_clause | DETERMINISTIC)*
-      ((PIPELINED? (IS | AS) (DECLARE? seq_of_declare_specs? body | call_spec)) | (PIPELINED | AGGREGATE) USING implementation_type_name) //';'
+      ((PIPELINED? (IS | AS) (DECLARE? seq_of_declare_specs? body | call_spec)) | (PIPELINED | AGGREGATE) USING implementation_type_name) ';'
     ;
 
-//don't eat trailing ";"; needed for seq_of_statements -DJ
+//no- need for declare_spec; don't eat trailing ";"; needed for seq_of_statements -DJ
 procedure_body
     : PROCEDURE id=identifier { return addref("proc_defs", id); }? ('(' parameter (',' parameter)* ')')? (IS | AS)
-      (DECLARE? seq_of_declare_specs? body | call_spec | EXTERNAL) //';'
+      (DECLARE? seq_of_declare_specs? body | call_spec | EXTERNAL) ';'
     ;
 
 //no-make "create" optional -DJ
@@ -2894,9 +2896,9 @@ primary_key_clause
 
 // Anonymous PL/SQL code block
 
-//make trailing ";" optional -DJ
+//removed- make trailing ";" optional -DJ
 anonymous_block
-    : (DECLARE seq_of_declare_specs)? BEGIN seq_of_statements (EXCEPTION exception_handler+)? END SEMICOLON?
+    : (DECLARE  /*{ return DEBUG(101); }?*/ seq_of_declare_specs)? BEGIN seq_of_statements (EXCEPTION exception_handler+)? END //SEMICOLON?
     ;
 
 // Common DDL Clauses
@@ -2943,6 +2945,7 @@ seq_of_declare_specs
     : declare_spec+
     ;
 
+//all of these should end with ";" (must be consistent): -DJ
 declare_spec
     : pragma_declaration
     | variable_declaration
@@ -3030,6 +3033,7 @@ label_declaration
     ;
 
 //NONE of these should eat a ";" (should be consistent); seq_of_statements takes care of the trailing ";" -DJ
+//added for-in -DJ
 statement
     : body
     | block
@@ -3062,8 +3066,10 @@ continue_statement
     : CONTINUE label_name? (WHEN condition)?
     ;
 
+//kludge: label is matching "WHEN"; disambiguate -DJ
 exit_statement
-    : EXIT label_name? (WHEN condition)?
+//    : EXIT label_name? (WHEN condition)?
+    : EXIT (WHEN condition / label_name WHEN condition)?
     ;
 
 goto_statement
@@ -3071,7 +3077,7 @@ goto_statement
     ;
 
 if_statement
-    : IF condition THEN seq_of_statements elsif_part* else_part? END IF
+    : IF /*{ return DEBUG(101); }?*/ condition THEN seq_of_statements elsif_part* else_part? END IF
     ;
 
 elsif_part
@@ -3093,8 +3099,9 @@ cursor_loop_param
     | record_name IN (cursor_name ('(' expressions? ')')? | '(' select_statement ')')
     ;
 
+//make "all" optional -DJ
 forall_statement
-    : FORALL index_name IN bounds_clause sql_statement (SAVE EXCEPTIONS)?
+    : (FORALL / FOR) index_name IN bounds_clause sql_statement (SAVE EXCEPTIONS)?
     ;
 
 bounds_clause
@@ -3150,12 +3157,14 @@ exception_handler
     ;
 
 trigger_block
-    : (DECLARE? declare_spec+)? body
+//    : (DECLARE? declare_spec+)? body
+    : (DECLARE? seq_of_declare_specs)? body
     ;
 
 //make body optional to allow stand-alone proc defs -DJ
 block
-    : DECLARE? declare_spec+ body?
+//    : DECLARE? declare_spec+ body?
+    : DECLARE? seq_of_declare_specs body?
     ;
 
 // SQL Statements
@@ -3324,7 +3333,7 @@ subquery_operation_part
 //fix ambiguous element list (too greedy) -DJ
 query_block
 //    : SELECT { return verb({verb: "select"}); }? (DISTINCT | UNIQUE | ALL)? (ASTERISK | (','? selected_element)+) //{ return DEBUG(8); }?
-    : SELECT { return addref("verbs", {verb: "select"}); }? (DISTINCT | UNIQUE | ALL)? (ASTERISK | selected_element (',' selected_element)*) //{ return DEBUG(8); }?
+    : SELECT { return DEBUG(1); }? { return addref("verbs", {verb: "select"}); }? (DISTINCT | UNIQUE | ALL)? (ASTERISK | selected_element (',' selected_element)*) //{ return DEBUG(8); }?
       into_clause? from_clause where_clause? hierarchical_query_clause? group_by_clause? model_clause?
     ;
 
@@ -3338,7 +3347,7 @@ from_clause
 
 select_list_elements
     : tableview_name '.' ASTERISK
-    | (regular_id '.')? expressions
+    | (regular_id '.')? expression //s //seems wrong -DJ
     ;
 
 //fix ambiguous element list (too greedy) -DJ
@@ -3569,7 +3578,7 @@ for_update_options
     ;
 
 update_statement
-    : UPDATE { return verb({verb: "update"}); }? general_table_ref update_set_clause where_clause? static_returning_clause? error_logging_clause?
+    : UPDATE { return addref("verbs", {verb: "update"}); }? general_table_ref update_set_clause where_clause? static_returning_clause? error_logging_clause?
     ;
 
 // Update Specific Clauses
@@ -3585,11 +3594,11 @@ column_based_update_set_clause
     ;
 
 delete_statement
-    : DELETE { return verb({verb: "delete"}); }? FROM? general_table_ref where_clause? static_returning_clause? error_logging_clause?
+    : DELETE { return addref("verbs", {verb: "delete"}); }? FROM? general_table_ref where_clause? static_returning_clause? error_logging_clause?
     ;
 
 insert_statement
-    : INSERT { return verb({verb: "insert"}); }? (single_table_insert | multi_table_insert)
+    : INSERT { return addref("verbs", {verb: "insert"}); }? (single_table_insert | multi_table_insert)
     ;
 
 // Insert Specific Clauses
@@ -3776,11 +3785,12 @@ broken_logical_expression
 logical_expression //good
 //    : /*logical_expression*/ multiset_expression AND logical_expression
 //    | /*logical_expression*/ multiset_expression OR logical_expression
-    : multiset_expression (IS NOT?
+    : NOT logical_expression //put NOT first to avoid confusion with variable name -DJ
+    / multiset_expression (IS NOT?
         (NULL_ | NAN | PRESENT | INFINITE | A_LETTER SET | EMPTY | OF TYPE?
         '(' ONLY? type_spec (',' type_spec)* ')'))*
         ((AND / OR) logical_expression)*
-    | NOT logical_expression
+//    | NOT logical_expression
     ;
 SLOWER_logical_expression
     : /*logical_expression*/ multiset_expression AND logical_expression
@@ -3788,7 +3798,7 @@ SLOWER_logical_expression
     | multiset_expression (IS NOT?
         (NULL_ | NAN | PRESENT | INFINITE | A_LETTER SET | EMPTY | OF TYPE?
         '(' ONLY? type_spec (',' type_spec)* ')'))*
-    | NOT logical_expression
+    | NOT /*{ return DEBUG(101); }?*/ logical_expression
     ;
 
 multiset_expression
@@ -4172,8 +4182,10 @@ partition_extension_clause
     : (SUBPARTITION | PARTITION) FOR? '(' expressions? ')'
     ;
 
+//col alias uses double quotes, not single quotes -DJ
 column_alias
-    : AS? (identifier_kywdok | quoted_string)
+//    : AS? (identifier_kywdok | quoted_string)
+    : AS? (identifier_kywdok | DELIMITED_ID)
     | AS
     ;
 
@@ -4329,11 +4341,11 @@ link_name
     ;
 
 column_name
-    : first=identifier more=('.' id=id_expression { return id; })* { more.unshift(first); return addref("col_refs", {column_name: more.map((part) => key(part)).join(".")}); }
+    : first=identifier more=('.' id_expression)* { more.unshift([null, first]); return addref("col_refs", {column_name: more.map((part) => key(part[1])).join(".")}); }
     ;
 
 tableview_name
-    : first=identifier more=('.' id=id_expression { return id; })? { /*DEBUG(55);*/ return addref("tbl_refs", {tblvw_name: key(first) + (more? `.${key(more)}`: "")}); }?
+    : first=identifier more=('.' id_expression)? { /*DEBUG(55);*/ return addref("tbl_refs", {tblvw_name: key(first) + (more? `.${key(more[1])}`: "")}); }?
       ('@' link_name | /*TODO{!(input.LA(2) == BY)}?*/ partition_extension_clause)?
     ;
 
@@ -4503,7 +4515,7 @@ general_element
 
 general_element_part
 //    : (INTRODUCER char_set_name)? id_expression ('.' d_expression)* ('@' link_name)? function_argument?
-    : (INTRODUCER char_set_name)? first=id_expression more=('.' id_expression)* { if ((key(first) == "sysdate") || (key(first) == "CASE_NUM")) DEBUG(1+1); const name = key(first) + more.map((parts) => `.${key(parts[1])}`).join(""); return iskeywd(name) || addref("general", {element: name}); }? ('@' link_name)? function_argument?
+    : (INTRODUCER char_set_name)? first=id_expression more=('.' id_expression)* { /*if ((key(first) == "sysdate") || (key(first) == "CASE_NUM")) DEBUG(1+1)*/; const name = key(first) + more.map((parts) => `.${key(parts[1])}`).join(""); return iskeywd(name) || addref("general", {element: name}); }? ('@' link_name)? function_argument?
     ;
 
 table_element
@@ -4654,8 +4666,10 @@ constant
     | DEFAULT
     ;
 
+//allow floats -DJ
 numeric
-    : UNSIGNED_INTEGER
+    : FLOAT_FRAGMENT //put this one first so "." will match before uns int
+    | UNSIGNED_INTEGER
     | APPROXIMATE_NUM_LIT
     ;
 
@@ -4678,13 +4692,15 @@ identifier
 //NO WORKY: makes other keywords ambiguous ("from" alias)
 identifier_kywdok
 //no worky    : (INTRODUCER char_set_name)? id=id_expression /*~{ return iskeywd(id); }?*/ { return id; }
-    : identifier
+//    : (INTRODUCER char_set_name)? id=(id_expression | CASE) { return id[0] || id[1]; } //kludge; avoid "FROM" ambiguity
+//    : (INTRODUCER char_set_name)? id=id_expression ~{ return (key(id).toUpperCase() != "FROM") && iskeywd(id); }? { return id; } //kludge: want to allow keywords here, but don't allow "FROM", "WHERE" or "INTO" - those are needed for correct SELECT stmt parsing (ambiguous parsing without them)
+    : (INTRODUCER char_set_name)? !FROM !WHERE !INTO !GROUP !ORDER id=id_expression /*~{ return iskeywd(id); }?*/ { return id; }
     | VALUE //kludge: just hard-code the ones that are needed -DJ
     ;
 
 id_expression
-    : regular_id
-    | DELIMITED_ID
+    : rid=regular_id { return rid; }
+    | did=DELIMITED_ID { return did; }
     ;
 
 outer_join_sign

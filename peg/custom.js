@@ -4,16 +4,32 @@
 //adds custom logic to peg parser
 //gets inserts below parser logic right before parser start rule is invoked
 {
-    const SHOW_RULE = false; //true;
 //require("magic-globals"); //https://github.com/gavinengel/magic-globals
 //require("colors").enabled = true; //for console output; https://github.com/Marak/colors.js/issues/127
 //const util = require("util");
-const {commas, highlight, echo, entries, numkeys, inspect} = require("../peg/ant2peg");
+const {commas, highlight, echo, trunc, entries, numkeys, inspect} = require("../peg/ant2peg");
 
+    const SHOW_RULE = false; //true;
 //    const HELLO = "hello";
 
 //debug info:
     function debug(str) { console.log(str); }
+
+    //return "true" so these can all be embedded into grammar rules:
+    function DEBUG(n)
+    {
+//    var called_from = __stack[1].getLineNumber();
+if ((n % 100) != 1) if (!state.srcline.match(/:7735$/)) return true;
+        if (!DEBUG.seen) DEBUG.seen = {};
+        ++DEBUG.seen[n] || (DEBUG.seen[n] = 1);
+console.error(`DEBUG(${n}) loc ${my_location()} ${state.srcline} @${__srcline}`.red_lt);
+console.error("STACK", __stack.slice(2).map((stkfr, inx, all) => (all[all.length - inx - 1].getFunctionName() || "no func?").replace(/^peg\$parse(?:[a-z0-9@_])/i, "")).join(" -> ").cyan_lt);
+console.error("inp:", trunc(input.slice(peg$currPos, peg$currPos + 30), 30).escall.blue_lt);
+//if (!DEBUG.seen) debugger; //first time only;
+debugger;
+        if (n < 0) throw `DEBUG(${n}) ${state.srcline}`.red;
+        return true;
+    }
 
 //    function inspect(obj) { console.log(util.inspect(obj, false, 10)); }
 
@@ -22,7 +38,7 @@ const {commas, highlight, echo, entries, numkeys, inspect} = require("../peg/ant
     function peg$buildStructuredError(expected, found, location)
     {
         console.log("fail exp".red, peg$maxFailExpected);
-        console.log("fail pos".red, peg$maxFailPos, "line", input.slice(0, peg$maxFailPos).split(/\n/).length, highlight(input, peg$maxFailPos, 20));
+        console.log("fail pos".red, peg$maxFailPos, "line", input.slice(0, peg$maxFailPos).split(/\n/).length, highlight(input /*+ "####################"*/, peg$maxFailPos, 20));
 //    return sv_peg$buildStructuredError.apply(null, arguments);
         return new peg$SyntaxError(
             peg$SyntaxError.buildMessage(expected, found),
@@ -55,22 +71,6 @@ const {commas, highlight, echo, entries, numkeys, inspect} = require("../peg/ant
 //    {
 //        return `${str.slice(Math.max(ofs - len, 0), Math.max(ofs - 1, 0)).blue}${str.slice(Math.max(ofs -1, 0), ofs + 1).red}${str.slice(ofs + 1, ofs + len).blue}`.replace(/\n/g, "\\n");
 //    }
-
-//return "true" so these can all be embedded into grammar rules:
-    function DEBUG(n)
-    {
-//    var called_from = __stack[1].getLineNumber();
-if (n != 1) if (!state.srcline.match(/:7735$/)) return true;
-        if (!DEBUG.seen) DEBUG.seen = {};
-        ++DEBUG.seen[n] || (DEBUG.seen[n] = 1);
-console.error(`DEBUG(${n}) loc ${my_location()} ${state.srcline}`.red);
-console.error("STACK", __stack.slice(2).map((stkfr, inx, all) => (all[all.length - inx - 1].getFunctionName() || "no func?").replace(/^peg\$parse/, "")).join(" -> ").cyan);
-console.error("inp:", input.slice(peg$currPos, peg$currPos + 30).escall.blue);
-//if (!DEBUG.seen) debugger; //first time only;
-debugger;
-        if (n < 0) throw `DEBUG(${n}) ${state.srcline}`.red;
-        return true;
-    }
 
     function my_location()
     {
@@ -208,8 +208,9 @@ debugger;
         {
             #KEYWORDS# //this will be replaced by a list of keywords
         };
+const svstr = str;
         if (typeof str != "string") str = key(str);
-if (!str.toUpperCase) throw new Error(`!str? ${typeof str}: ${JSON.stringify(str)} @${__file}:${__line}`.red);
+if ((typeof str == "undefined") || !str.toUpperCase) throw new Error(`!str? ${typeof svstr}: ${JSON.stringify(svstr)} @${__file}:${__line}`.red);
         return keywds[str.toUpperCase()];
     }
 
@@ -217,7 +218,7 @@ if (!str.toUpperCase) throw new Error(`!str? ${typeof str}: ${JSON.stringify(str
 //first prop name is used as object "type" without needing extra prototypes
     function key(obj)
     {
-if (typeof obj != "object") throw new Error(`!obj @${__file}:${__line}`.red);
+if (typeof obj != "object") throw new Error(`!obj ${typeof obj}: ${JSON.stringify(obj)} @${__file}:${__line}`.red);
         const keys = Object.keys(obj || {});
         key.name1 = keys[0];
         return keys.length? obj[keys[0]]: obj;
